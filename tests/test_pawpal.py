@@ -4,6 +4,8 @@ import os
 import sys
 from datetime import date, timedelta
 
+import pytest
+
 # Make pawpal_system.py importable no matter where pytest is run from.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -103,3 +105,52 @@ def test_same_time_tasks_are_flagged_as_conflict():
 
     assert len(warnings) == 1
     assert "Morning walk" in warnings[0] and "Give pill" in warnings[0]
+
+
+# ---------- Edge cases ----------
+
+
+def test_empty_schedule_does_not_crash():
+    owner = Owner("Faheem")  # no pets at all
+    scheduler = Scheduler(owner)
+    assert scheduler.get_todays_schedule() == []
+
+    owner.add_pet(Pet(name="Biscuit", species="dog"))  # pet with no tasks
+    assert scheduler.get_todays_schedule() == []
+    assert scheduler.conflict_warnings([]) == []
+
+
+def test_back_to_back_tasks_do_not_conflict():
+    # 08:00 + 30 min ends exactly when the 08:30 task starts: legal, no overlap.
+    scheduler, pet = make_scheduler_with_pet()
+    pet.add_task(Task("Morning walk", "", "08:00", 30, "high", "daily"))
+    pet.add_task(Task("Breakfast", "", "08:30", 10, "high", "daily"))
+
+    assert scheduler.check_conflicts(scheduler.get_todays_schedule()) == []
+
+
+def test_future_task_is_not_on_todays_schedule():
+    scheduler, pet = make_scheduler_with_pet()
+    pet.add_task(Task("Vet visit", "", "10:00", 60, "high", "once",
+                      due_date=date.today() + timedelta(days=3)))
+
+    assert scheduler.get_todays_schedule() == []
+
+
+def test_completing_weekly_task_recurs_in_seven_days():
+    scheduler, pet = make_scheduler_with_pet()
+    task = Task("Nail trim", "", "17:00", 15, "low", "weekly")
+    pet.add_task(task)
+
+    next_task = scheduler.mark_task_complete(task)
+
+    assert next_task.due_date == date.today() + timedelta(weeks=1)
+
+
+def test_invalid_task_values_are_rejected():
+    with pytest.raises(ValueError):  # time not in HH:MM format
+        Task("Walk", "Biscuit", "8 AM", 30, "high", "daily")
+    with pytest.raises(ValueError):  # unknown priority
+        Task("Walk", "Biscuit", "08:00", 30, "urgent", "daily")
+    with pytest.raises(ValueError):  # unknown frequency
+        Task("Walk", "Biscuit", "08:00", 30, "high", "hourly")

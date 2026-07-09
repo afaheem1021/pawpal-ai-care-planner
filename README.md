@@ -62,18 +62,35 @@ Completed 'Morning walk' -> next occurrence due 2026-07-10
 
 ```bash
 # Run the full test suite:
-pytest
+python -m pytest
 
-# Run with coverage:
-pytest --cov
+# Run with per-test detail:
+python -m pytest -v
 ```
 
-Sample test output:
+**What the tests cover** (12 tests in `tests/test_pawpal.py`):
+
+- **Core behaviors** — marking a task complete flips its status; adding a task grows the pet's list.
+- **Sorting correctness** — `get_todays_schedule()` returns tasks in chronological order, even when added out of order.
+- **Filtering** — `filter_by_pet()` returns only the named pet's tasks.
+- **Recurrence logic** — completing a daily task creates a copy due tomorrow, weekly recurs in exactly 7 days, and `"once"` tasks don't recur.
+- **Conflict detection** — two same-time tasks are flagged with a warning; back-to-back tasks (one ending exactly when the next starts) are correctly *not* flagged.
+- **Edge cases & validation** — an owner with no pets (or a pet with no tasks) yields an empty schedule without crashing; future-dated tasks stay off today's schedule; malformed times, priorities, and frequencies raise `ValueError` at creation.
+
+Successful test run:
 
 ```
-tests/test_pawpal.py .......                                             [100%]
-7 passed in 0.02s
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
+rootdir: .../ai110-module2show-pawpal-starter
+collected 12 items
+
+tests/test_pawpal.py ............                                        [100%]
+
+============================== 12 passed in 0.01s ==============================
 ```
+
+**Confidence Level: ★★★★☆ (4/5)** — Every implemented behavior is covered by at least one test, including boundary conditions (back-to-back tasks) and failure paths (invalid input). The missing star: the Streamlit UI layer isn't automatically tested (it's verified manually), and recurrence is only tested one cycle ahead — long-running scenarios like a month of daily completions or real calendar-month recurrence aren't exercised.
 
 ## 📐 Smarter Scheduling
 
