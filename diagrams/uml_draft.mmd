@@ -36,3 +36,4 @@ classDiagram
     Owner "1" o-- "many" Pet : has
     Pet "1" o-- "many" Task : has
     Scheduler "1" --> "1" Owner : manages
+    Scheduler ..> Task : schedules
