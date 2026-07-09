@@ -46,13 +46,17 @@ pip install -r requirements.txt
 
 Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
 
-```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
-```
+===== Today's schedule for Faheem's pets (sorted by time) =====
+[ ] 07:30  Mochi    Refill water fountain  (5 min, medium priority, daily, due 2026-07-09)
+[ ] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
+[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
+[ ] 18:00  Mochi    Clean litter box  (10 min, low priority, daily, due 2026-07-09)
+[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
+
+⚠ Conflicts detected:
+  - 'Morning walk' (Biscuit, 08:00, 30 min) overlaps 'Give heartworm pill' (Biscuit, 08:00)
+
+Completed 'Morning walk' -> next occurrence due 2026-07-10
 
 ## 🧪 Testing PawPal+
 
@@ -67,19 +71,18 @@ pytest --cov
 Sample test output:
 
 ```
-# Paste your pytest output here
+tests/test_pawpal.py .......                                             [100%]
+7 passed in 0.02s
 ```
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.sort_by_priority()` | Time sorting parses `"HH:MM"` into minutes-since-midnight (via `Task.start_minutes()`) so `9:00` sorts before `10:00`; priority uses the `PRIORITY_ORDER` ranking (high → medium → low) instead of alphabetical order. |
+| Filtering | `Scheduler.filter_by_pet()`, `Scheduler.filter_by_status()` | Narrow any task list to one pet's tasks, or to complete/incomplete tasks. `get_todays_schedule()` also filters out completed tasks and tasks not yet due. |
+| Conflict handling | `Scheduler.check_conflicts()`, `Scheduler.conflict_warnings()` | Two tasks conflict when their time windows (`start` to `start + duration_mins`) overlap — including exact same-time tasks. `conflict_warnings()` returns readable warning strings instead of crashing. |
+| Recurring tasks | `Scheduler.mark_task_complete()` | Completing a `daily`/`weekly`/`monthly` task auto-creates its next occurrence with `due_date = today + FREQUENCY_INTERVAL[frequency]` (using `timedelta`); `once` tasks simply complete. |
 
 ## 📸 Demo Walkthrough
 

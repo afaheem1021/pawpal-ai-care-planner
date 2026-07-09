@@ -3,14 +3,24 @@
 Class skeletons generated from the UML diagram in diagrams/uml_draft.mmd.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta
 
 # Priority ranking used for sorting: lower number = more urgent.
 # Alphabetical sorting of the raw strings would give high < low < medium.
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 VALID_FREQUENCIES = {"daily", "weekly", "monthly", "once"}
+
+# How far ahead a recurring task's next occurrence is due.
+# "monthly" is approximated as 30 days; "once" never recurs.
+FREQUENCY_INTERVAL = {
+    "daily": timedelta(days=1),
+    "weekly": timedelta(weeks=1),
+    "monthly": timedelta(days=30),
+}
 
 TIME_FORMAT = "%H:%M"  # 24-hour "HH:MM", e.g. "08:00"
 
@@ -24,8 +34,9 @@ class Task:
     time: str  # 24-hour "HH:MM", e.g. "08:00"
     duration_mins: int
     priority: str  # one of PRIORITY_ORDER's keys
-    frequency: str  # one of VALID_FREQUENCIES; display info only (see Scheduler)
+    frequency: str  # one of VALID_FREQUENCIES; drives recurrence on completion
     is_complete: bool = False
+    due_date: date = field(default_factory=date.today)
 
     def __post_init__(self):
         """Reject malformed times and unknown priority/frequency values at creation."""
@@ -86,17 +97,45 @@ class Scheduler:
         self.owner = owner
 
     def get_todays_schedule(self) -> list[Task]:
-        """Collect today's tasks across all of the owner's pets.
+        """Return incomplete tasks due today (or overdue), sorted by time.
 
-        Scope decision: every task is considered due today, regardless of
-        its frequency — `frequency` is display info only. (Modeling "is a
-        weekly task due today?" would need a day-of-week or last-completed
-        date on Task, which is out of scope for this version.)
+        Completed tasks drop off the schedule; recurring tasks reappear
+        because mark_task_complete() creates their next occurrence with a
+        future due_date, which shows up here once that date arrives.
         """
+        today = date.today()
         schedule = []
         for pet in self.owner.get_all_pets():
-            schedule.extend(pet.get_tasks())
+            for task in pet.get_tasks():
+                if not task.is_complete and task.due_date <= today:
+                    schedule.append(task)
         return self.sort_by_time(schedule)
+
+    def filter_by_pet(self, tasks: list[Task], pet_name: str) -> list[Task]:
+        """Return only the tasks belonging to the named pet."""
+        return [task for task in tasks if task.pet_name == pet_name]
+
+    def filter_by_status(self, tasks: list[Task], is_complete: bool = False) -> list[Task]:
+        """Return only the tasks matching the given completion status."""
+        return [task for task in tasks if task.is_complete == is_complete]
+
+    def mark_task_complete(self, task: Task) -> Task | None:
+        """Complete a task; recurring tasks spawn their next occurrence.
+
+        The follow-up copy is due FREQUENCY_INTERVAL[frequency] from today
+        and is added to the same pet's list. Returns that new Task, or
+        None for one-off ("once") tasks.
+        """
+        task.mark_complete()
+        interval = FREQUENCY_INTERVAL.get(task.frequency)
+        if interval is None:
+            return None
+        next_task = replace(task, is_complete=False, due_date=date.today() + interval)
+        for pet in self.owner.get_all_pets():
+            if pet.name == task.pet_name:
+                pet.add_task(next_task)
+                break
+        return next_task
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
         """Return tasks sorted by their scheduled time.
@@ -125,3 +164,12 @@ class Scheduler:
                 if later.start_minutes() < earlier_end:
                     conflicts.append((earlier, later))
         return conflicts
+
+    def conflict_warnings(self, tasks: list[Task]) -> list[str]:
+        """Return a human-readable warning string for each overlapping pair."""
+        return [
+            f"'{first.description}' ({first.pet_name}, {first.time}, "
+            f"{first.duration_mins} min) overlaps '{second.description}' "
+            f"({second.pet_name}, {second.time})"
+            for first, second in self.check_conflicts(tasks)
+        ]

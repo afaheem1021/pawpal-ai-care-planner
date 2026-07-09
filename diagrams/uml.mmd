@@ -7,6 +7,7 @@ classDiagram
         +String priority
         +String frequency
         +bool is_complete
+        +Date due_date
         +mark_complete()
     }
 
@@ -30,7 +31,11 @@ classDiagram
         +get_todays_schedule()
         +sort_by_time(tasks)
         +sort_by_priority(tasks)
+        +filter_by_pet(tasks, pet_name)
+        +filter_by_status(tasks, is_complete)
+        +mark_task_complete(task)
         +check_conflicts(tasks)
+        +conflict_warnings(tasks)
     }
 
     Owner "1" o-- "many" Pet : has
