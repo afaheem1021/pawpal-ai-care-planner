@@ -94,7 +94,7 @@ if pets:
 
     all_tasks = [t for p in pets for t in p.get_tasks()]
     if all_tasks:
-        st.write("Current tasks:")
+        st.write("All tasks:")
         st.table(
             [
                 {
@@ -104,6 +104,7 @@ if pets:
                     "Duration (min)": t.duration_mins,
                     "Priority": t.priority,
                     "Frequency": t.frequency,
+                    "Due": str(t.due_date),
                     "Done": "✅" if t.is_complete else "—",
                 }
                 for t in all_tasks
@@ -116,40 +117,54 @@ else:
 
 st.divider()
 
-# ---------------- Schedule ----------------
-st.subheader("Build Schedule")
+# ---------------- Today's Schedule ----------------
+st.subheader("Today's Schedule")
 
-if st.button("Generate schedule"):
-    # Step 3: the button calls the Scheduler, which pulls tasks from the
-    # Owner's pets (Scheduler -> Owner -> Pet -> Task) and sorts them by time.
-    scheduler = Scheduler(owner)
-    schedule = scheduler.get_todays_schedule()
+scheduler = Scheduler(owner)
+schedule = scheduler.get_todays_schedule()  # incomplete tasks due today, time-sorted
 
-    if not schedule:
-        st.info("Nothing to schedule yet — add some tasks first.")
+# Flash message from the previous rerun (e.g., after completing a task).
+if "flash" in st.session_state:
+    st.success(st.session_state.pop("flash"))
+
+if not pets or not schedule:
+    st.info("Nothing on today's schedule yet — add some tasks above.")
+else:
+    # Filtering controls, wired to Scheduler.filter_by_pet
+    pet_filter = st.selectbox("Show tasks for", ["All pets"] + [p.name for p in pets])
+    if pet_filter != "All pets":
+        schedule = scheduler.filter_by_pet(schedule, pet_filter)
+
+    # Conflict warnings surface automatically — no extra click needed.
+    warnings = scheduler.conflict_warnings(schedule)
+    if warnings:
+        for warning in warnings:
+            st.warning(f"Schedule conflict: {warning}. Consider moving one of these tasks.")
     else:
-        st.markdown(f"#### Today's schedule for {owner.name}'s pets")
-        st.table(
-            [
-                {
-                    "Time": t.time,
-                    "Pet": t.pet_name,
-                    "Task": t.description,
-                    "Duration (min)": t.duration_mins,
-                    "Priority": t.priority,
-                }
-                for t in schedule
-            ]
-        )
+        st.success("No scheduling conflicts — this plan is doable!")
 
-        conflicts = scheduler.check_conflicts(schedule)
-        if conflicts:
-            st.warning("Scheduling conflicts detected:")
-            for first, second in conflicts:
-                st.markdown(
-                    f"- **{first.description}** ({first.pet_name}, {first.time}, "
-                    f"{first.duration_mins} min) overlaps **{second.description}** "
-                    f"({second.pet_name}, {second.time})"
-                )
-        else:
-            st.success("No scheduling conflicts.")
+    # One row per task with a "Done" button; completing a recurring task
+    # spawns its next occurrence via Scheduler.mark_task_complete.
+    for row, task in enumerate(schedule):
+        time_col, desc_col, done_col = st.columns([2, 6, 2])
+        time_col.markdown(f"**{task.time}**")
+        desc_col.markdown(
+            f"{task.description} — {task.pet_name} "
+            f"({task.duration_mins} min, {task.priority} priority, {task.frequency})"
+        )
+        if done_col.button("Done ✅", key=f"done_{row}_{task.pet_name}_{task.description}"):
+            next_task = scheduler.mark_task_complete(task)
+            message = f"Completed '{task.description}' for {task.pet_name}."
+            if next_task:
+                message += f" Next occurrence scheduled for {next_task.due_date}."
+            st.session_state.flash = message
+            st.rerun()
+
+    # Completed tasks, via Scheduler.filter_by_status
+    completed = scheduler.filter_by_status(
+        [t for p in pets for t in p.get_tasks()], is_complete=True
+    )
+    if completed:
+        with st.expander(f"Completed tasks ({len(completed)})"):
+            for task in completed:
+                st.markdown(f"~~{task.time} {task.description} — {task.pet_name}~~")

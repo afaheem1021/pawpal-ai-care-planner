@@ -22,6 +22,16 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## ✨ Features
+
+- **Time-sorted daily schedule** — tasks from every pet are merged into one plan, sorted chronologically by parsing `"HH:MM"` times into minutes (so 9:00 correctly comes before 10:00).
+- **Priority ranking** — tasks can also be ordered high → medium → low using an explicit ranking instead of alphabetical order.
+- **Filtering** — view the schedule for a single pet, or split tasks by complete/incomplete status.
+- **Conflict warnings** — overlapping time windows (start + duration) are detected and reported as plain-English warnings, including exact same-time tasks; back-to-back tasks are correctly allowed.
+- **Recurring tasks** — completing a `daily`, `weekly`, or `monthly` task automatically schedules its next occurrence (today + 1 day, + 7 days, or + 30 days); `once` tasks simply complete.
+- **Due-date awareness** — completed and future-dated tasks stay off today's schedule, so the plan always shows exactly what's left to do today.
+- **Input validation** — malformed times, unknown priorities, and unknown frequencies are rejected when a task is created, with clear error messages surfaced in the UI.
+
 ## Getting started
 
 ### Setup
@@ -82,7 +92,7 @@ Successful test run:
 ```
 ============================= test session starts ==============================
 platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
-rootdir: .../ai110-module2show-pawpal-starter
+rootdir: faheem@Ahmeds-MacBook-Pro ai110-module2show-pawpal-starter
 collected 12 items
 
 tests/test_pawpal.py ............                                        [100%]
@@ -90,7 +100,7 @@ tests/test_pawpal.py ............                                        [100%]
 ============================== 12 passed in 0.01s ==============================
 ```
 
-**Confidence Level: ★★★★☆ (4/5)** — Every implemented behavior is covered by at least one test, including boundary conditions (back-to-back tasks) and failure paths (invalid input). The missing star: the Streamlit UI layer isn't automatically tested (it's verified manually), and recurrence is only tested one cycle ahead — long-running scenarios like a month of daily completions or real calendar-month recurrence aren't exercised.
+**Confidence Level: 4/5 ** — all the behaviors that were implemented were tested, feeling confident, but not everthing can be perfect. 
 
 ## 📐 Smarter Scheduling
 
@@ -103,12 +113,55 @@ tests/test_pawpal.py ............                                        [100%]
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Launch the app with `streamlit run app.py` (with your virtual environment active).
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+**Main UI features:**
+
+- **Owner section** — set the owner's name (stored once in `st.session_state`, so data survives page interactions).
+- **Pets section** — a form to add pets by name and species; duplicate names are rejected.
+- **Tasks section** — a form to add tasks (description, time picker, duration, priority, frequency) to a chosen pet, plus an "All tasks" table showing every task with its due date and completion status.
+- **Today's Schedule** — a live, time-sorted view of what's left to do today, with a pet filter dropdown, automatic conflict banners, a **Done ✅** button on every row, and an expander listing completed tasks.
+
+**Example workflow:**
+
+1. Enter your name in **Owner name**.
+2. Add a pet — e.g., *Biscuit (dog)* — then a second, *Mochi (cat)*.
+3. Add a task for Biscuit: *Morning walk*, 08:00, 30 min, high priority, daily.
+4. Add a second Biscuit task at the same time: *Give heartworm pill*, 08:00, 5 min — the **Today's Schedule** section immediately shows a yellow warning that the two tasks overlap, suggesting one be moved.
+5. Add Mochi's tasks (e.g., *Refill water fountain* at 07:30) and watch the schedule interleave both pets' tasks in time order.
+6. Use the **Show tasks for** dropdown to filter the schedule down to one pet.
+7. Click **Done ✅** on the morning walk — a green message confirms completion and announces the next occurrence (tomorrow, since it's a daily task). The walk moves to the *Completed tasks* expander, and tomorrow's copy waits off-screen until its due date.
+
+**Key Scheduler behaviors shown:** time sorting (`sort_by_time`), pet/status filtering (`filter_by_pet`, `filter_by_status`), overlap-based conflict warnings (`conflict_warnings`), and automatic recurrence (`mark_task_complete`).
+
+The same logic can be exercised without the UI by running `python main.py`:
+
+```
+===== Today's schedule for Faheem's pets (sorted by time) =====
+[ ] 07:30  Mochi    Refill water fountain  (5 min, medium priority, daily, due 2026-07-09)
+[ ] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
+[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
+[ ] 18:00  Mochi    Clean litter box  (10 min, low priority, daily, due 2026-07-09)
+[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
+
+⚠ Conflicts detected:
+  - 'Morning walk' (Biscuit, 08:00, 30 min) overlaps 'Give heartworm pill' (Biscuit, 08:00)
+
+===== Only Biscuit's tasks =====
+[ ] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
+[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
+[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
+
+Completed 'Morning walk' -> next occurrence due 2026-07-10
+
+===== Completed tasks =====
+[x] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
+
+===== Still on today's schedule =====
+[ ] 07:30  Mochi    Refill water fountain  (5 min, medium priority, daily, due 2026-07-09)
+[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
+[ ] 18:00  Mochi    Clean litter box  (10 min, low priority, daily, due 2026-07-09)
+[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
+```
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
