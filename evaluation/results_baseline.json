@@ -1,4 +1,5 @@
 {
+  "mode": "offline",
   "prompt_mode": "baseline",
   "metrics": {
     "total_cases": 19,

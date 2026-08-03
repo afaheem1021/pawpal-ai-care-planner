@@ -22,16 +22,19 @@ human to approve tasks **individually** before anything touches the schedule.
   validation → repair → human approval) in the `pawpal_ai/` package, wired
   into the existing Streamlit app, CLI, tests, and docs.
 - **Reproducible without an API key:** a deterministic offline demo client
-  powers the CLI demo, the Streamlit demo mode, all 107 unit tests, and the
-  19-case evaluation harness.
+  powers the CLI demo, the Streamlit demo mode, all 108 automated tests, and
+  the 19-case evaluation harness.
 
 ## Original Base Project
 
 ### Original Goal
 
-PawPal+ (Module 2 project) is a Streamlit app that helps a busy pet owner
-plan care tasks — track walks, feeding, meds, grooming; respect time,
-priority, and owner constraints; and produce a clear daily plan.
+PawPal+ was my Module 2 project: a Streamlit application that helps a busy
+pet owner organize walks, feeding, medication reminders, grooming, and other
+care tasks around time and priority constraints. Its deterministic Python
+model sorted schedules, detected conflicts, handled recurrence, and powered
+both manual UI and CLI workflows. It did not interpret natural language or
+call an AI model; users entered pets and tasks through structured fields.
 
 ### Original Capabilities
 
@@ -131,9 +134,10 @@ uses.
 │   └── interaction_logger.py
 ├── knowledge_base/           # pet_profiles / owner_preferences /
 │                             # scheduling_rules / task_templates (.md)
-├── evaluation/               # cases.json, results.json, results_baseline.json
-├── tests/                    # 107 tests (original 12 preserved)
+├── evaluation/               # test cases + offline and live result snapshots
+├── tests/                    # 108 tests (original 12 preserved)
 ├── diagrams/                 # architecture.mmd, uml_final.mmd
+├── assets/                   # optional supplementary visual assets
 ├── logs/                     # runtime JSONL traces (gitignored)
 ├── .env.example              # config template (no secrets committed)
 ├── model_card.md             # model card + AI-collaboration reflection
@@ -209,7 +213,7 @@ See [.env.example](.env.example). Demo mode needs **nothing** configured.
 
 | Variable | Purpose |
 |---|---|
-| `PAWPAL_USE_LIVE_MODEL` | `true` to call the real model (default `false`) |
+| `PAWPAL_USE_LIVE_MODEL` | `true` makes Streamlit use the live provider (default `false`); CLI/evaluator use `--live` |
 | `PAWPAL_LLM_PROVIDER` | `gemini` (default) or `anthropic` |
 | `PAWPAL_API_KEY` | provider API key (never committed; `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` also work) |
 | `PAWPAL_LLM_MODEL` | provider model id (default Gemini model: `gemini-3.5-flash`) |
@@ -222,7 +226,7 @@ Everything below runs offline with the deterministic demo client:
 ```bash
 python main.py --demo        # three-case AI CLI demo
 streamlit run app.py         # UI shows "Mode: demo"
-python -m pytest -v          # 107 tests, no network
+python -m pytest -v          # 108 tests, no network
 python evaluate.py           # 19-case evaluation
 ```
 
@@ -230,8 +234,8 @@ python evaluate.py           # 19-case evaluation
 
 ```bash
 cp .env.example .env         # then set PAWPAL_API_KEY=<your key>
-                             # and PAWPAL_USE_LIVE_MODEL=true
-python main.py --live
+python main.py --live        # --live explicitly selects the provider
+# For Streamlit, also set PAWPAL_USE_LIVE_MODEL=true in .env:
 streamlit run app.py         # UI shows "Mode: live model"
 ```
 
@@ -265,10 +269,10 @@ python -m pytest -v
 Actual output (tail):
 
 ```text
-tests/test_workflow.py::test_approval_revalidates_conflicts_and_adds_nothing PASSED [ 98%]
+tests/test_workflow.py::test_approval_revalidates_conflicts_and_adds_nothing PASSED [ 99%]
 tests/test_workflow.py::test_approval_rejects_edited_invalid_task PASSED [100%]
 
-============================= 107 passed in 0.62s =============================
+============================= 108 passed in 0.53s =============================
 ```
 
 All 12 original PawPal+ tests are preserved and passing.
@@ -378,6 +382,7 @@ Actual output of `python evaluate.py` (results also saved to
 ```text
 PawPal AI Evaluation
 ====================
+Mode: offline
 Prompt mode: specialized
 
 PASS  single-daily-task

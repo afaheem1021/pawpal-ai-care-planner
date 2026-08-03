@@ -147,6 +147,6 @@ The Applied AI upgrade itself was implemented with an AI coding agent working
 in phases (audit -> schemas -> retrieval -> guardrails -> clients -> prompts ->
 validator -> workflow -> UI -> CLI -> evaluation -> docs), with the human
 owner reviewing commits. Everything the agent produced was verified by
-running the test suite (107 tests), the evaluation harness (19/19 cases), and
+running the test suite (108 tests), the evaluation harness (19/19 cases), and
 the Streamlit `AppTest` UI flows before each commit. See `model_card.md` for
 a reflection including one accepted and one rejected AI suggestion.

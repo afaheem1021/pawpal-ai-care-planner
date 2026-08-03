@@ -2,7 +2,7 @@
 title: PawPal AI system architecture (matches implemented code)
 ---
 flowchart TD
-    A[User enters natural-language request<br/>Streamlit app.py or CLI main.py --demo] --> B[Input Guardrails<br/>pawpal_ai/guardrails.py]
+    A[User enters natural-language request<br/>Streamlit app.py or CLI main.py --demo / --live] --> B[Input Guardrails<br/>pawpal_ai/guardrails.py]
 
     B -->|"rejected (empty, medical, unknown pet, override...)"| C[Safe error response<br/>no model call, schedule unchanged]
     B -->|accepted| D[Knowledge Retriever<br/>pawpal_ai/retriever.py - TF-IDF]
@@ -12,7 +12,7 @@ flowchart TD
     D --> G[scheduling_rules.md]
     D --> H[task_templates.md]
 
-    E --> I[Specialized AI Extractor<br/>pawpal_ai/prompts.py + llm_client.py<br/>live Anthropic adapter OR DemoLLMClient]
+    E --> I[Specialized AI Extractor<br/>pawpal_ai/prompts.py + llm_client.py<br/>live Gemini / Anthropic adapter OR DemoLLMClient]
     F --> I
     G --> I
     H --> I

@@ -204,9 +204,11 @@ matters to you.
 
 ## AI Collaboration During Development
 
-This upgrade was implemented with an AI coding agent (Claude) working in
-reviewed phases; every phase was verified by running the tests, the
-evaluation harness, and the demos before committing.
+This upgrade was implemented with AI coding agents working in reviewed
+phases; every phase was verified by running the tests, the evaluation
+harness, and the demos before committing. The human owner retained control
+of the requirements, reviewed behavior and evidence, and decided what to
+accept, revise, or reject.
 
 ### Helpful AI Suggestion
 
@@ -247,7 +249,8 @@ Two real ones, both caught by verification rather than by reading the code:
 
 ## Future Improvements
 
-Live-model comparison numbers; persistence beyond the session; embedding
-retrieval when the knowledge base grows; owner-editable availability
-windows; a larger, adversarially-authored evaluation set; richer repair
-context (e.g., suggesting the nearest three free slots).
+Repeated live-model trials with variance, latency, and cost reporting;
+persistence beyond the session; embedding retrieval when the knowledge base
+grows; owner-editable availability windows; a larger,
+adversarially-authored evaluation set; richer repair context (e.g.,
+suggesting the nearest three free slots).

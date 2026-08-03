@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pawpal_system import Owner, Pet
 
 pytest.importorskip("streamlit.testing.v1")
+import streamlit as st  # noqa: E402
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 APP_PATH = str(Path(__file__).resolve().parent.parent / "app.py")
@@ -95,3 +96,16 @@ def test_manual_task_entry_still_works():
     # The original manual form is unchanged and functional.
     form_inputs = [w for w in at.text_input if w.label == "Task description"]
     assert form_inputs, "manual task form is missing"
+
+
+def test_invalid_live_provider_falls_back_to_demo(monkeypatch):
+    monkeypatch.setenv("PAWPAL_USE_LIVE_MODEL", "true")
+    monkeypatch.setenv("PAWPAL_LLM_PROVIDER", "not-a-provider")
+    monkeypatch.setenv("PAWPAL_API_KEY", "test-key-not-real")
+    st.cache_resource.clear()
+    try:
+        # make_app asserts that Streamlit completed without an exception. An
+        # uncaught provider configuration error would fail that assertion.
+        make_app()
+    finally:
+        st.cache_resource.clear()

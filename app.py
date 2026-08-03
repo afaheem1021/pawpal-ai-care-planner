@@ -8,7 +8,7 @@ from pawpal_system import VALID_FREQUENCIES, Owner, Pet, Scheduler, Task
 
 # PawPal AI: proposal pipeline on top of the original deterministic system.
 from pawpal_ai.interaction_logger import InteractionLogger
-from pawpal_ai.llm_client import MissingAPIKeyError, create_client_from_env
+from pawpal_ai.llm_client import LLMClientError, create_client_from_env
 from pawpal_ai.retriever import KnowledgeRetriever
 from pawpal_ai.schemas import TaskProposal
 from pawpal_ai.workflow import PawPalAIWorkflow, apply_approved_tasks
@@ -135,8 +135,9 @@ def get_ai_components():
     retriever = KnowledgeRetriever(Path(__file__).parent / "knowledge_base")
     try:
         client, mode = create_client_from_env()
-    except MissingAPIKeyError as err:
-        # Live mode requested but misconfigured: fall back to demo, stay usable.
+    except LLMClientError as err:
+        # Any live-provider setup error falls back to demo, so a typo in the
+        # provider name or a missing key cannot take down the application.
         from pawpal_ai.demo_client import DemoLLMClient
 
         return retriever, DemoLLMClient(), "demo", str(err)
