@@ -1,167 +1,539 @@
-# PawPal+ (Module 2 Project)
+# PawPal AI
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+**A reliable natural-language pet-care scheduling agent** — the Applied AI
+final-project upgrade of the completed **PawPal+** scheduler.
 
-## Scenario
+A pet owner types something like:
 
-A busy pet owner needs help staying consistent with pet care. They want an assistant that can:
+> Biscuit needs a 30-minute walk every morning around 8. Feed him after the
+> walk. Clean Mochi's litter box every evening at 6.
 
-- Track pet care tasks (walks, feeding, meds, enrichment, grooming, etc.)
-- Consider constraints (time available, priority, owner preferences)
-- Produce a daily plan and explain why it chose that plan
+PawPal AI validates the request, retrieves custom PawPal context, extracts
+structured task proposals with a specialized model prompt, validates every
+field against the original deterministic scheduler's rules, detects
+conflicts, performs at most **one** controlled repair, and then waits for the
+human to approve tasks **individually** before anything touches the schedule.
 
-Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
+## Project Summary
 
-## What you will build
+- **Base:** PawPal+, a working OOP pet-care management and scheduling system
+  (kept fully intact — the AI never bypasses it).
+- **Upgrade:** an AI proposal pipeline (guardrails → retrieval → extraction →
+  validation → repair → human approval) in the `pawpal_ai/` package, wired
+  into the existing Streamlit app, CLI, tests, and docs.
+- **Reproducible without an API key:** a deterministic offline demo client
+  powers the CLI demo, the Streamlit demo mode, all 95 unit tests, and the
+  19-case evaluation harness.
 
-Your final app should:
+## Original Base Project
 
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
+### Original Goal
 
-## ✨ Features
+PawPal+ (Module 2 project) is a Streamlit app that helps a busy pet owner
+plan care tasks — track walks, feeding, meds, grooming; respect time,
+priority, and owner constraints; and produce a clear daily plan.
 
-- **Time-sorted daily schedule** — tasks from every pet are merged into one plan, sorted chronologically by parsing `"HH:MM"` times into minutes (so 9:00 correctly comes before 10:00).
-- **Priority ranking** — tasks can also be ordered high → medium → low using an explicit ranking instead of alphabetical order.
-- **Filtering** — view the schedule for a single pet, or split tasks by complete/incomplete status.
-- **Conflict warnings** — overlapping time windows (start + duration) are detected and reported as plain-English warnings, including exact same-time tasks; back-to-back tasks are correctly allowed.
-- **Recurring tasks** — completing a `daily`, `weekly`, or `monthly` task automatically schedules its next occurrence (today + 1 day, + 7 days, or + 30 days); `once` tasks simply complete.
-- **Due-date awareness** — completed and future-dated tasks stay off today's schedule, so the plan always shows exactly what's left to do today.
-- **Input validation** — malformed times, unknown priorities, and unknown frequencies are rejected when a task is created, with clear error messages surfaced in the UI.
+### Original Capabilities
 
-## Getting started
+All of this existed **before** the AI upgrade and still works unchanged
+(`pawpal_system.py`: `Owner`, `Pet`, `Task`, `Scheduler`):
 
-### Setup
+- Time-sorted daily schedule (parses `"HH:MM"` into minutes, so 9:00 < 10:00)
+- Priority ranking (high → medium → low) and pet/status filtering
+- Conflict detection on overlapping time windows, with back-to-back tasks
+  correctly allowed and same-time tasks flagged
+- Recurring tasks (daily/weekly/monthly spawn their next occurrence on
+  completion; `once` simply completes)
+- Due-date awareness and validation of times/priorities/frequencies at task
+  creation (`Task.__post_init__`)
+- Streamlit UI (add pets/tasks, today's schedule, Done buttons) and a CLI
+  demo (`python main.py`), covered by the original 12 unit tests
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+## What the Final Project Adds
+
+- **Natural-language task extraction** into typed `TaskProposal` objects
+- **Custom multi-source retrieval (RAG)** over a PawPal knowledge base
+- **Specialized structured prompting** with few-shot examples + a baseline
+  prompt for comparison
+- **Schema validation** at every boundary (malformed model output is rejected)
+- **Business-rule + conflict validation** that reuses the original
+  `Task.__post_init__` and `Scheduler.check_conflicts` as the final authority
+- **One controlled repair attempt** when a proposal is invalid or conflicting
+- **Human-in-the-loop approval** — per-task checkboxes, editable fields,
+  revalidation on apply
+- **Input guardrails** (empty/too-long input, unknown pets, medical dosage /
+  diagnosis / emergencies, rule-override attempts)
+- **Structured operational tracing** to `logs/pawpal_ai.jsonl`
+- **Automated evaluation harness** (`evaluate.py`, 19 cases)
+
+## Key AI Features
+
+| Feature | Where |
+|---|---|
+| Guardrails | `pawpal_ai/guardrails.py` |
+| TF-IDF retrieval over 4 knowledge files | `pawpal_ai/retriever.py`, `knowledge_base/` |
+| Specialized + baseline prompts, repair prompt | `pawpal_ai/prompts.py` |
+| Provider-agnostic LLM client (Anthropic adapter, fake, offline demo) | `pawpal_ai/llm_client.py`, `pawpal_ai/demo_client.py` |
+| Typed schemas with boundary validation | `pawpal_ai/schemas.py` |
+| Business/conflict validator | `pawpal_ai/validator.py` |
+| Multi-step workflow with 1-repair policy | `pawpal_ai/workflow.py` |
+| JSONL operational tracing | `pawpal_ai/interaction_logger.py` |
+| Evaluation harness | `evaluate.py`, `evaluation/cases.json` |
+
+## How the Workflow Works
+
+```text
+Natural-language request
+        ↓
+Input guardrails            (reject unsafe/empty/unknown-pet requests, no model call)
+        ↓
+Custom context retrieval    (TF-IDF over knowledge_base/*.md, stable source ids)
+        ↓
+Specialized AI extraction   (live Anthropic model OR deterministic demo client)
+        ↓
+Structured task proposal    (strict JSON → TaskProposal dataclasses)
+        ↓
+Schema & business validation (pets exist, HH:MM, 1–240 min, allowed values,
+        ↓                     source ids retrieved, no medical content, ≤5 tasks)
+Existing PawPal conflict detection (the ORIGINAL Scheduler.check_conflicts)
+        ↓
+≤ 1 repair attempt          (only for repairable issues; never for unknown
+        ↓                     pets, medical content, or missing information)
+Human review & approval     (editable fields, per-task checkboxes)
+        ↓
+Existing PawPal task creation (revalidate → Task(...) → Pet.add_task)
+        ↓
+Updated daily schedule      (Scheduler.get_todays_schedule, unchanged)
 ```
 
-### Suggested workflow
+## System Architecture
 
-1. Read the scenario carefully and identify requirements and edge cases.
-2. Draft a UML diagram (classes, attributes, methods, relationships).
-3. Convert UML into Python class stubs (no logic yet).
-4. Implement scheduling logic in small increments.
-5. Add tests to verify key behaviors.
-6. Connect your logic to the Streamlit UI in `app.py`.
-7. Refine UML so it matches what you actually built.
+Mermaid source: [`diagrams/architecture.mmd`](diagrams/architecture.mmd)
+(drawn from the implemented code — every box names its module). The original
+class design is in [`diagrams/uml_final.mmd`](diagrams/uml_final.mmd).
 
-## 🖥️ Sample Output
+Key design decision: the LLM can only *propose*. The original deterministic
+system remains the source of truth for task validation, sorting, recurrence,
+conflict detection, and storage — approved proposals are converted into
+ordinary `Task` objects through the same `Pet.add_task` path the manual form
+uses.
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+## Repository Structure
 
-===== Today's schedule for Faheem's pets (sorted by time) =====
-[ ] 07:30  Mochi    Refill water fountain  (5 min, medium priority, daily, due 2026-07-09)
-[ ] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
-[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
-[ ] 18:00  Mochi    Clean litter box  (10 min, low priority, daily, due 2026-07-09)
-[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
+```text
+├── app.py                    # Streamlit UI: original features + AI assistant
+├── main.py                   # original CLI demo + `--demo` / `--live` AI demo
+├── pawpal_system.py          # ORIGINAL deterministic logic layer (unchanged)
+├── evaluate.py               # evaluation harness
+├── pawpal_ai/                # the AI upgrade package
+│   ├── schemas.py  retriever.py  guardrails.py  llm_client.py
+│   ├── demo_client.py  prompts.py  validator.py  workflow.py
+│   └── interaction_logger.py
+├── knowledge_base/           # pet_profiles / owner_preferences /
+│                             # scheduling_rules / task_templates (.md)
+├── evaluation/               # cases.json, results.json, results_baseline.json
+├── tests/                    # 95 tests (original 12 preserved)
+├── diagrams/                 # architecture.mmd, uml_final.mmd
+├── logs/                     # runtime JSONL traces (gitignored)
+├── .env.example              # config template (no secrets committed)
+├── model_card.md             # model card + AI-collaboration reflection
+└── ai_interactions.md        # committed operational traces
+```
 
-⚠ Conflicts detected:
-  - 'Morning walk' (Biscuit, 08:00, 30 min) overlaps 'Give heartworm pill' (Biscuit, 08:00)
+## Knowledge Base and Retrieval
 
-Completed 'Morning walk' -> next occurrence due 2026-07-10
+Four Markdown sources are split at `##` headings into chunks with stable ids
+(`pet_profiles.md#biscuit`, `scheduling_rules.md#conflicts`, …) and indexed
+with a small pure-Python TF-IDF/cosine implementation — deterministic, zero
+extra dependencies, appropriate for four local files (a hosted vector DB
+would be overkill). The retriever handles empty queries, missing
+directories, top-k limits, and optional per-file filtering; proposals may
+only cite source ids that were actually retrieved (enforced by the
+validator).
 
-## 🧪 Testing PawPal+
+## Specialized Prompting
+
+Two modes (`pawpal_ai/prompts.py`):
+
+- **Baseline** (experiment only): `"Convert this request into pet-care tasks
+  and return JSON."`
+- **Specialized** (production): role, exact JSON schema, allowed
+  priorities/frequencies, HH:MM format, 5-task limit, medical boundaries,
+  missing-information behavior, source-id citation rules, relative-ordering
+  rule, confidence calibration — plus **four few-shot examples** (single
+  task, ordered tasks, missing information, medical refusal).
+
+## Reliability and Guardrails
+
+1. **Input guardrails** run before any model call: empty/whitespace, >1000
+   chars, no schedulable action, unknown pet names, medical dosage /
+   medication selection / diagnosis, emergencies (redirected to a vet), and
+   rule-override attempts.
+2. **Schema boundary**: model output must parse into the typed schema or it
+   is rejected (`SchemaError`), never partially trusted.
+3. **Deterministic validation**: every field re-checked; the original
+   `Task.__post_init__` is the final constructor gate; the original
+   `Scheduler.check_conflicts` decides conflicts.
+4. **One repair attempt maximum** (`MAX_REPAIR_ATTEMPTS = 1`), only for
+   repairable issue codes.
+5. **Safe failure**: model/network errors, malformed output, and failed
+   repairs produce a clear message, add nothing, and leave manual entry
+   fully usable (verified by tests and evaluation cases).
+
+## Human-in-the-Loop Approval
+
+No AI-generated task is ever added automatically. The Streamlit review UI
+shows each proposed task with editable fields (pet, description, time,
+duration, priority, frequency), its explanation, confidence, cited sources,
+and validation status, plus an **Approve this task** checkbox. "Add Approved
+Tasks" revalidates the (possibly edited) subset — including conflicts —
+before converting to real `Task` objects, and the pending proposal is
+cleared afterward so a refresh cannot double-add.
+
+## Installation
 
 ```bash
-# Run the full test suite:
-python -m pytest
+git clone https://github.com/afaheem1021/pawpal-ai-care-planner.git
+cd pawpal-ai-care-planner
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env               # optional; only needed for live mode
+```
 
-# Run with per-test detail:
+Python 3.9+ is sufficient (developed and tested on 3.9.6).
+
+## Environment Variables
+
+See [.env.example](.env.example). Demo mode needs **nothing** configured.
+
+| Variable | Purpose |
+|---|---|
+| `PAWPAL_USE_LIVE_MODEL` | `true` to call the real model (default `false`) |
+| `PAWPAL_API_KEY` | provider API key (never committed; `ANTHROPIC_API_KEY` also works) |
+| `PAWPAL_LLM_MODEL` | model id (default `claude-opus-5`) |
+| `PAWPAL_LOGGING_ENABLED` | `false` disables JSONL tracing |
+
+## Running in Demo Mode
+
+Everything below runs offline with the deterministic demo client:
+
+```bash
+python main.py --demo        # three-case AI CLI demo
+streamlit run app.py         # UI shows "Mode: demo"
+python -m pytest -v          # 95 tests, no network
+python evaluate.py           # 19-case evaluation
+```
+
+## Running With a Live Model
+
+```bash
+cp .env.example .env         # then set PAWPAL_API_KEY=<your key>
+                             # and PAWPAL_USE_LIVE_MODEL=true
+python main.py --live
+streamlit run app.py         # UI shows "Mode: live model"
+```
+
+Unit tests and the evaluation harness intentionally **never** use the live
+model. If live mode is misconfigured, the app falls back to demo mode with a
+notice instead of crashing.
+
+## Running the Streamlit Application
+
+```bash
+streamlit run app.py
+```
+
+Add pets → (optionally add manual tasks) → describe tasks in the ✨ PawPal AI
+Task Assistant → Generate → review retrieved sources, validation issues, and
+any repair notice → tick the tasks you want → **Add Approved Tasks**.
+
+## Running the CLI Demonstration
+
+```bash
+python main.py --demo
+```
+
+## Running Unit Tests
+
+```bash
 python -m pytest -v
 ```
 
-**What the tests cover** (12 tests in `tests/test_pawpal.py`):
+Actual output (tail):
 
-- **Core behaviors** — marking a task complete flips its status; adding a task grows the pet's list.
-- **Sorting correctness** — `get_todays_schedule()` returns tasks in chronological order, even when added out of order.
-- **Filtering** — `filter_by_pet()` returns only the named pet's tasks.
-- **Recurrence logic** — completing a daily task creates a copy due tomorrow, weekly recurs in exactly 7 days, and `"once"` tasks don't recur.
-- **Conflict detection** — two same-time tasks are flagged with a warning; back-to-back tasks (one ending exactly when the next starts) are correctly *not* flagged.
-- **Edge cases & validation** — an owner with no pets (or a pet with no tasks) yields an empty schedule without crashing; future-dated tasks stay off today's schedule; malformed times, priorities, and frequencies raise `ValueError` at creation.
+```text
+tests/test_workflow.py::test_approval_revalidates_conflicts_and_adds_nothing PASSED [ 98%]
+tests/test_workflow.py::test_approval_rejects_edited_invalid_task PASSED [100%]
 
-Successful test run:
-
-```
-============================= test session starts ==============================
-platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
-rootdir: faheem@Ahmeds-MacBook-Pro ai110-module2show-pawpal-starter
-collected 12 items
-
-tests/test_pawpal.py ............                                        [100%]
-
-============================== 12 passed in 0.01s ==============================
+============================== 95 passed in 0.48s ==============================
 ```
 
-**Confidence Level: 4/5 ** — all the behaviors that were implemented were tested, feeling confident, but not everthing can be perfect. 
+All 12 original PawPal+ tests are preserved and passing.
 
-## 📐 Smarter Scheduling
+## Running the Evaluation Harness
 
-| Feature | Method(s) | Notes |
-|---------|-----------|-------|
-| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.sort_by_priority()` | Time sorting parses `"HH:MM"` into minutes-since-midnight (via `Task.start_minutes()`) so `9:00` sorts before `10:00`; priority uses the `PRIORITY_ORDER` ranking (high → medium → low) instead of alphabetical order. |
-| Filtering | `Scheduler.filter_by_pet()`, `Scheduler.filter_by_status()` | Narrow any task list to one pet's tasks, or to complete/incomplete tasks. `get_todays_schedule()` also filters out completed tasks and tasks not yet due. |
-| Conflict handling | `Scheduler.check_conflicts()`, `Scheduler.conflict_warnings()` | Two tasks conflict when their time windows (`start` to `start + duration_mins`) overlap — including exact same-time tasks. `conflict_warnings()` returns readable warning strings instead of crashing. |
-| Recurring tasks | `Scheduler.mark_task_complete()` | Completing a `daily`/`weekly`/`monthly` task auto-creates its next occurrence with `due_date = today + FREQUENCY_INTERVAL[frequency]` (using `timedelta`); `once` tasks simply complete. |
-
-## 📸 Demo Walkthrough
-
-Launch the app with `streamlit run app.py` (with your virtual environment active).
-
-**Main UI features:**
-
-- **Owner section** — set the owner's name (stored once in `st.session_state`, so data survives page interactions).
-- **Pets section** — a form to add pets by name and species; duplicate names are rejected.
-- **Tasks section** — a form to add tasks (description, time picker, duration, priority, frequency) to a chosen pet, plus an "All tasks" table showing every task with its due date and completion status.
-- **Today's Schedule** — a live, time-sorted view of what's left to do today, with a pet filter dropdown, automatic conflict banners, a **Done ✅** button on every row, and an expander listing completed tasks.
-
-**Example workflow:**
-
-1. Enter your name in **Owner name**.
-2. Add a pet — e.g., *Biscuit (dog)* — then a second, *Mochi (cat)*.
-3. Add a task for Biscuit: *Morning walk*, 08:00, 30 min, high priority, daily.
-4. Add a second Biscuit task at the same time: *Give heartworm pill*, 08:00, 5 min — the **Today's Schedule** section immediately shows a yellow warning that the two tasks overlap, suggesting one be moved.
-5. Add Mochi's tasks (e.g., *Refill water fountain* at 07:30) and watch the schedule interleave both pets' tasks in time order.
-6. Use the **Show tasks for** dropdown to filter the schedule down to one pet.
-7. Click **Done ✅** on the morning walk — a green message confirms completion and announces the next occurrence (tomorrow, since it's a daily task). The walk moves to the *Completed tasks* expander, and tomorrow's copy waits off-screen until its due date.
-
-**Key Scheduler behaviors shown:** time sorting (`sort_by_time`), pet/status filtering (`filter_by_pet`, `filter_by_status`), overlap-based conflict warnings (`conflict_warnings`), and automatic recurrence (`mark_task_complete`).
-
-The same logic can be exercised without the UI by running `python main.py`:
-
-```
-===== Today's schedule for Faheem's pets (sorted by time) =====
-[ ] 07:30  Mochi    Refill water fountain  (5 min, medium priority, daily, due 2026-07-09)
-[ ] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
-[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
-[ ] 18:00  Mochi    Clean litter box  (10 min, low priority, daily, due 2026-07-09)
-[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
-
-⚠ Conflicts detected:
-  - 'Morning walk' (Biscuit, 08:00, 30 min) overlaps 'Give heartworm pill' (Biscuit, 08:00)
-
-===== Only Biscuit's tasks =====
-[ ] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
-[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
-[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
-
-Completed 'Morning walk' -> next occurrence due 2026-07-10
-
-===== Completed tasks =====
-[x] 08:00  Biscuit  Morning walk  (30 min, high priority, daily, due 2026-07-09)
-
-===== Still on today's schedule =====
-[ ] 07:30  Mochi    Refill water fountain  (5 min, medium priority, daily, due 2026-07-09)
-[ ] 08:00  Biscuit  Give heartworm pill  (5 min, high priority, monthly, due 2026-07-09)
-[ ] 18:00  Mochi    Clean litter box  (10 min, low priority, daily, due 2026-07-09)
-[ ] 19:00  Biscuit  Evening walk  (30 min, medium priority, daily, due 2026-07-09)
+```bash
+python evaluate.py
 ```
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+## End-to-End Examples
+
+All three examples below are actual output from `python main.py --demo`
+(deterministic — you will get the same lines).
+
+### Example 1: First-Pass Success
+
+```text
+CASE 1 - First-pass success
+  Input: 'Walk Biscuit every morning at 8 for 30 minutes and feed him afterward.'
+
+  Retrieved sources:
+    - pet_profiles.md#biscuit (score 0.3242)
+    - task_templates.md#feeding (score 0.1989)
+    - pet_profiles.md#mochi (score 0.1638)
+    - task_templates.md#walk (score 0.1251)
+
+  Proposal (final, after any repair): 2 task(s)
+    1. Biscuit: Walk at 08:00 (30 min, high, daily, confidence 0.95)
+    2. Biscuit: Feeding at 08:30 (10 min, high, once, confidence 0.80)
+
+  Validation: VALID (2 valid task(s))
+
+  Repair attempted: no
+  ...
+  Workflow status: ready_for_review
+  Message to user: 2 task(s) are ready for your review. Nothing is added until you approve.
+
+  [Human approval] Approving all valid tasks (the CLI stands in for the review UI here).
+  Tasks added to the schedule: 2
+```
+
+### Example 2: Conflict Detection and Repair
+
+```text
+CASE 2 - Conflict with the existing schedule, then one repair
+  Input: 'Give Biscuit enrichment play at 8:15 for 15 minutes.'
+
+  Proposal (final, after any repair): 1 task(s)
+    1. Biscuit: Enrichment play at 08:40 (15 min, medium, once, confidence 0.95)
+
+  Validation: VALID (1 valid task(s))
+
+  Repair attempted: yes
+
+  Workflow trace:
+     receive_request [ok] Request received (52 chars)
+          guardrails [passed] Input accepted
+           retrieval [ok] Retrieved 4 context chunk(s)
+               parse [ok] Parsed proposal with 1 task(s)
+          validation [failed] 0 valid task(s), 1 error(s)
+              repair [requested] One repair attempt requested
+              repair [succeeded] Repaired proposal is valid
+
+  Workflow status: ready_for_review
+  Message to user: 1 task(s) are ready for your review. Nothing is added until
+  you approve. (One automatic repair was applied - check the changes.)
+```
+
+The 08:15 request conflicted with the existing 08:00–08:30 walk; the single
+repair moved it to 08:40 — back-to-back after the 08:30–08:40 feeding, which
+the original scheduler correctly allows.
+
+### Example 3: Guardrail Rejection
+
+```text
+CASE 3 - Guardrail rejection (medication dosage)
+  Input: 'Decide how much medicine Biscuit should receive.'
+
+  Retrieved sources:
+    (none)
+
+  Workflow status: guardrail_rejected
+  Message to user: PawPal AI cannot calculate or suggest medication dosages.
+  It can only schedule a medication routine your veterinarian has already
+  prescribed. Please ask your vet about dosing.
+
+  No tasks were added (unsafe request never reached the model).
+```
+
+Final schedule after the demo — produced by the ORIGINAL scheduler:
+
+```text
+===== Final schedule after the demo (original Scheduler output) =====
+[ ] 08:00  Biscuit  Walk  (30 min, high priority, daily, due 2026-08-02)
+[ ] 08:30  Biscuit  Feeding  (10 min, high priority, once, due 2026-08-02)
+[ ] 08:40  Biscuit  Enrichment play  (15 min, medium priority, once, due 2026-08-02)
+
+No scheduling conflicts - the AI-added tasks fit the plan.
+```
+
+## Evaluation Results
+
+Actual output of `python evaluate.py` (results also saved to
+[`evaluation/results.json`](evaluation/results.json)):
+
+```text
+PawPal AI Evaluation
+====================
+Prompt mode: specialized
+
+PASS  single-daily-task
+PASS  multiple-tasks
+PASS  ordered-tasks
+PASS  weekly-task
+PASS  monthly-task
+PASS  ambiguous-time
+PASS  unknown-pet-guardrail
+PASS  hallucinated-pet
+PASS  unsupported-frequency
+PASS  invalid-time
+PASS  excessive-duration
+PASS  existing-conflict
+PASS  proposal-conflict
+PASS  back-to-back-valid
+PASS  medication-dosage
+PASS  medical-diagnosis
+PASS  malformed-model-output
+PASS  api-failure
+PASS  empty-input
+
+Cases executed:                19
+Passed:                        19
+Failed:                         0
+Overall pass rate:          100.0%
+
+Structured output validity: 13/15
+Correct task-count rate:    19/19
+Known-pet compliance:       12/13
+Valid-time compliance:      13/13
+Valid-frequency compliance: 13/13
+Conflict-free final plans:  11/11
+Guardrail behavior:         4/4
+Repair success:             6/6
+Safe failure behavior:      3/3
+```
+
+Reading the sub-100% rows honestly: `13/15` structured validity and `12/13`
+known-pet compliance are **by design** — three cases script a misbehaving
+model (malformed JSON twice, an API outage, a hallucinated pet name) to
+prove the system rejects bad output; the pipeline caught all of them.
+
+## Baseline Versus Specialized Prompting
+
+Both prompt modes run through the same harness:
+
+```bash
+python evaluate.py --prompt-mode specialized   # evaluation/results.json
+python evaluate.py --prompt-mode baseline      # evaluation/results_baseline.json
+```
+
+| Metric | Baseline | Specialized |
+|---|---:|---:|
+| Overall pass rate | 100.0% | 100.0% |
+| Structured output validity | 13/15 | 13/15 |
+| Guardrail behavior | 4/4 | 4/4 |
+| Repair success | 6/6 | 6/6 |
+
+**Honest interpretation:** in offline mode both prompts score identically
+because the deterministic demo client is prompt-agnostic — it cannot exhibit
+the failure modes a real model shows under an under-specified prompt. The
+offline comparison therefore verifies the *harness*, not the prompt effect.
+The structural difference is documented in `model_card.md` (what the
+baseline prompt omits and which validator error each omission maps to), and
+running the true comparison is one command once an API key is configured:
+`PAWPAL_USE_LIVE_MODEL=true python evaluate.py --prompt-mode baseline`.
+No live-model numbers are claimed here because none were collected.
+
+## RAG Before and After
+
+Reproducible comparison (same request, retrieval disabled vs enabled —
+actual output):
+
+```text
+--- WITHOUT retrieval (empty context) ---
+retrieved sources: (none)
+  Walk at 08:00 | cites: (no grounding)
+  Feeding at 08:30 | cites: (no grounding)
+
+--- WITH retrieval (knowledge_base/) ---
+retrieved sources: ['pet_profiles.md#biscuit', 'task_templates.md#feeding',
+                    'task_templates.md#walk', 'scheduling_rules.md#conflicts']
+  Walk at 08:00 | cites: ['pet_profiles.md#biscuit', 'task_templates.md#walk']
+  Feeding at 08:30 | cites: ['pet_profiles.md#biscuit', 'task_templates.md#feeding']
+```
+
+What actually changes offline: with retrieval, every proposal is **grounded**
+— it cites the exact knowledge-base sections used, the UI shows those
+sections to the reviewer, and the validator rejects citations of sources
+that were not retrieved (`unknown_source_id`). With a live model the
+retrieved context additionally informs durations and time windows (Biscuit's
+30-minute walks, the owner's 07:00–09:00 window); that effect is not
+measurable with the offline client and is not claimed as measured.
+
+## Design Decisions and Tradeoffs
+
+- **The LLM proposes; the original system decides.** All validation, sorting,
+  recurrence, and conflict logic stays in `pawpal_system.py`. Cost: an extra
+  translation layer (`TaskProposal` → `Task`). Benefit: a hallucinating
+  model cannot corrupt the schedule.
+- **Pure-Python TF-IDF instead of scikit-learn / a vector DB** — four small
+  Markdown files don't justify a heavy dependency; determinism helps tests.
+- **A deterministic demo client instead of mocked screenshots** — graders can
+  run every claim in this README. The demo client is honest about being
+  rule-based (see `model_card.md` limitations).
+- **One repair attempt, hard-coded** — bounded cost and latency, no repair
+  loops; unrepairable issues (unknown pet, medical content) fail fast.
+- **Warnings vs errors** — outside-availability times are warnings (flag for
+  human review), not rejections; the human stays the decision-maker.
+
+## Known Limitations
+
+See `model_card.md` for the full list. Highlights: natural-language
+ambiguity, demo-client vs live-model behavioral differences, TF-IDF's
+keyword-level matching, session-only Streamlit persistence, a small
+(19-case) evaluation set, heuristic confidence scores, and a strictly
+non-medical scope.
+
+## Future Improvements
+
+- Collect live-model metrics for the baseline-vs-specialized table
+- Persist owners/tasks (SQLite) so approvals survive restarts
+- Embedding-based retrieval once the knowledge base outgrows TF-IDF
+- Multi-day planning and owner-editable availability windows
+- Expand the evaluation set and add live-model regression runs
+
+## Portfolio Reflection
+
+The most transferable lesson: **treat the model as an untrusted input
+source**. Every reliability property this system has — schema boundaries,
+deterministic revalidation, bounded repair, human approval, safe failure —
+came from asking "what happens when the model is wrong?" rather than "what
+happens when it's right?". The original PawPal+ scheduler turned out to be
+the perfect backstop: because it already validated tasks and detected
+conflicts deterministically, the AI layer could be added *around* it without
+weakening any guarantee it made.
+
+## Rubric Evidence Matrix
+
+| Rubric item | Evidence |
+|---|---|
+| Base project identification | README: Original Base Project |
+| Original scope | README: Original Capabilities |
+| Substantial AI feature | `pawpal_ai/` package, Streamlit AI assistant, CLI demo |
+| Integrated behavior | Approved proposals become real `Task`s via `Pet.add_task` |
+| Mermaid source | `diagrams/architecture.mmd` |
+| Input-to-output data flow | Architecture diagram + workflow section |
+| Working end-to-end system | `streamlit run app.py`, `python main.py --demo` |
+| Two or three examples | README: End-to-End Examples (3, reproducible) |
+| Reliability mechanism | Guardrails, schema boundary, validator, 1-repair policy |
+| Reliability examples | Examples 2–3, evaluation safety cases |
+| Installation instructions | README: Installation |
+| Test instructions | README: Running Unit Tests |
+| AI collaboration reflection | `model_card.md` |
+| Helpful / flawed AI suggestion | `model_card.md` |
+| Limitations | `model_card.md` |
+| RAG bonus | Retriever + knowledge base + before/after above |
+| Agent bonus | Generate→check→repair workflow + committed traces |
+| Specialization bonus | Few-shot specialized prompt + comparison harness |
+| Evaluation bonus | `evaluate.py`, 19 cases, saved results |
