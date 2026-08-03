@@ -1,0 +1,48 @@
+---
+title: PawPal AI system architecture (matches implemented code)
+---
+flowchart TD
+    A[User enters natural-language request<br/>Streamlit app.py or CLI main.py --demo] --> B[Input Guardrails<br/>pawpal_ai/guardrails.py]
+
+    B -->|"rejected (empty, medical, unknown pet, override...)"| C[Safe error response<br/>no model call, schedule unchanged]
+    B -->|accepted| D[Knowledge Retriever<br/>pawpal_ai/retriever.py - TF-IDF]
+
+    D --> E[pet_profiles.md]
+    D --> F[owner_preferences.md]
+    D --> G[scheduling_rules.md]
+    D --> H[task_templates.md]
+
+    E --> I[Specialized AI Extractor<br/>pawpal_ai/prompts.py + llm_client.py<br/>live Anthropic adapter OR DemoLLMClient]
+    F --> I
+    G --> I
+    H --> I
+    B --> I
+
+    I -->|JSON| J[Structured PlanProposal<br/>pawpal_ai/schemas.py]
+    J --> K[Schema + Business Validator<br/>pawpal_ai/validator.py]
+
+    K --> M[Existing PawPal Scheduler<br/>pawpal_system.py - unchanged]
+    M --> N[Conflict Detection<br/>Scheduler.check_conflicts]
+
+    N -->|repairable issue or conflict| L[Repair Prompt<br/>MAX 1 attempt - workflow.py]
+    L --> I
+
+    N -->|"valid + conflict-free"| O[Human Review UI<br/>editable fields + per-task approval]
+    K -->|"unrepairable (unknown pet, medical...)"| P[validation_failed<br/>nothing added]
+
+    O -->|rejected / unapproved| Q[Discard proposal<br/>schedule unchanged]
+    O -->|approved subset| R[Revalidate then create real Task objects<br/>workflow.apply_approved_tasks -> Pet.add_task]
+
+    R --> S[Updated daily schedule<br/>Scheduler.get_todays_schedule]
+
+    T[Evaluation Harness<br/>evaluate.py + evaluation/cases.json] -.exercises.-> B
+    T -.-> D
+    T -.-> I
+    T -.-> K
+    T -.-> N
+
+    B -.-> U[Structured Interaction Log<br/>logs/pawpal_ai.jsonl - interaction_logger.py]
+    D -.-> U
+    K -.-> U
+    L -.-> U
+    R -.-> U

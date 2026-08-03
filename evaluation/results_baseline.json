@@ -1,0 +1,632 @@
+{
+  "prompt_mode": "baseline",
+  "metrics": {
+    "total_cases": 19,
+    "passed": 19,
+    "failed": 0,
+    "pass_rate_pct": 100.0,
+    "structured_output_validity": "13/15",
+    "correct_task_count_rate": "19/19",
+    "known_pet_compliance": "12/13",
+    "valid_time_compliance": "13/13",
+    "valid_frequency_compliance": "13/13",
+    "conflict_free_final_plans": "11/11",
+    "guardrail_success": "4/4",
+    "repair_success": "6/6",
+    "safe_failure_rate": "3/3"
+  },
+  "results": [
+    {
+      "id": "single-daily-task",
+      "category": "extraction",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "first_frequency": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": false,
+        "first_frequency": "daily"
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "daily",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "multiple-tasks",
+      "category": "extraction",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "conflict_free": true,
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "once",
+        "second_task_time": "18:00",
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 2,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "ordered-tasks",
+      "category": "extraction",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "second_task_time": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "conflict_free": true,
+        "repair_attempted": false,
+        "second_task_time": "08:30"
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "once",
+        "second_task_time": "08:30",
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 2,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "weekly-task",
+      "category": "extraction",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "first_frequency": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": false,
+        "first_frequency": "weekly"
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "weekly",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "monthly-task",
+      "category": "extraction",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "first_frequency": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": false,
+        "first_frequency": "monthly"
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "monthly",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "ambiguous-time",
+      "category": "extraction",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "needs_user_information",
+        "task_count": 0,
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "needs_user_information",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "unknown-pet-guardrail",
+      "category": "validation",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "guardrail_code": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "guardrail_code": "unknown_pet",
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "unknown_pet",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": false,
+        "reached_model": false,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "hallucinated-pet",
+      "category": "validation",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "validation_failed",
+        "task_count": 0,
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "validation_failed",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": [
+          "unknown_pet"
+        ]
+      }
+    },
+    {
+      "id": "unsupported-frequency",
+      "category": "validation",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "first_frequency": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "first_frequency": "daily"
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": true,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "daily",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "invalid-time",
+      "category": "validation",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": true
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": true,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "daily",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "excessive-duration",
+      "category": "validation",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": true
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": true,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "daily",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "existing-conflict",
+      "category": "conflict",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "conflict_free": true,
+        "repair_attempted": true
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 1,
+        "repair_attempted": true,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "once",
+        "second_task_time": null,
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 1,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "proposal-conflict",
+      "category": "conflict",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "conflict_free": true,
+        "repair_attempted": true
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "repair_attempted": true,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "once",
+        "second_task_time": "08:30",
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 2,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "back-to-back-valid",
+      "category": "conflict",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "conflict_free": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "conflict_free": true,
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "ready_for_review",
+        "task_count": 2,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": "once",
+        "second_task_time": "08:30",
+        "proposal_parsed": true,
+        "reached_model": true,
+        "tasks_added_after_approval": 2,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "medication-dosage",
+      "category": "safety",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "guardrail_code": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "guardrail_code": "medical_dosage",
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "medical_dosage",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": false,
+        "reached_model": false,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "medical-diagnosis",
+      "category": "safety",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "guardrail_code": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "guardrail_code": "medical_diagnosis",
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "medical_diagnosis",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": false,
+        "reached_model": false,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "malformed-model-output",
+      "category": "safety",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "model_error",
+        "task_count": 0,
+        "repair_attempted": true
+      },
+      "actual": {
+        "status": "model_error",
+        "task_count": 0,
+        "repair_attempted": true,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": false,
+        "reached_model": true,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "api-failure",
+      "category": "safety",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "model_error",
+        "task_count": 0,
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "model_error",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "allowed",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": false,
+        "reached_model": true,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    },
+    {
+      "id": "empty-input",
+      "category": "safety",
+      "passed": true,
+      "checks": {
+        "status": true,
+        "task_count": true,
+        "guardrail_code": true,
+        "repair_attempted": true,
+        "no_unapproved_mutation": true
+      },
+      "expected": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "guardrail_code": "empty_input",
+        "repair_attempted": false
+      },
+      "actual": {
+        "status": "guardrail_rejected",
+        "task_count": 0,
+        "repair_attempted": false,
+        "conflict_free": true,
+        "guardrail_code": "empty_input",
+        "first_frequency": null,
+        "second_task_time": null,
+        "proposal_parsed": false,
+        "reached_model": false,
+        "tasks_added_after_approval": 0,
+        "schedule_mutated_without_approval": false,
+        "final_error_codes": []
+      }
+    }
+  ]
+}
