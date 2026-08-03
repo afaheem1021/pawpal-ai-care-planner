@@ -1,0 +1,232 @@
+{
+  "description": "PawPal AI evaluation cases. Default client is the deterministic demo extractor; 'scripted' cases inject exact model responses (including malformed ones) through FakeLLMClient, and 'api_failure' simulates a provider outage. No case requires a network connection.",
+  "cases": [
+    {
+      "id": "single-daily-task",
+      "category": "extraction",
+      "description": "One daily task with explicit time and duration",
+      "input": "Walk Biscuit every morning at 8 for 30 minutes.",
+      "setup": {"pets": [["Biscuit", "dog"], ["Mochi", "cat"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": false,
+                   "first_frequency": "daily"}
+    },
+    {
+      "id": "multiple-tasks",
+      "category": "extraction",
+      "description": "Two tasks for two different pets",
+      "input": "Walk Biscuit at 8 for 30 minutes. Clean Mochi's litter box at 18:00.",
+      "setup": {"pets": [["Biscuit", "dog"], ["Mochi", "cat"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 2,
+                   "conflict_free": true, "repair_attempted": false}
+    },
+    {
+      "id": "ordered-tasks",
+      "category": "extraction",
+      "description": "Walk followed by feeding ('afterward' relative ordering)",
+      "input": "Walk Biscuit at 8 for 30 minutes and feed him afterward.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 2,
+                   "conflict_free": true, "repair_attempted": false,
+                   "second_task_time": "08:30"}
+    },
+    {
+      "id": "weekly-task",
+      "category": "extraction",
+      "description": "Weekly grooming task",
+      "input": "Brush Mochi every week at 19:00 for 15 minutes.",
+      "setup": {"pets": [["Mochi", "cat"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": false,
+                   "first_frequency": "weekly"}
+    },
+    {
+      "id": "monthly-task",
+      "category": "extraction",
+      "description": "Monthly prescribed-medication reminder (allowed medical routine)",
+      "input": "Give Biscuit his heartworm pill monthly at 08:00.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": false,
+                   "first_frequency": "monthly"}
+    },
+    {
+      "id": "ambiguous-time",
+      "category": "extraction",
+      "description": "No time given - system must ask, not invent",
+      "input": "Schedule grooming for Biscuit.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "needs_user_information", "task_count": 0,
+                   "repair_attempted": false}
+    },
+    {
+      "id": "unknown-pet-guardrail",
+      "category": "validation",
+      "description": "Request references a pet that does not exist",
+      "input": "Walk Rex every morning at 8.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "guardrail_rejected", "task_count": 0,
+                   "guardrail_code": "unknown_pet", "repair_attempted": false}
+    },
+    {
+      "id": "hallucinated-pet",
+      "category": "validation",
+      "description": "Model invents a pet name; validator must reject, no repair",
+      "input": "Walk Biscuit at 8 for 30 minutes.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "client": {"type": "scripted", "responses": [
+        {"tasks": [{"pet_name": "Rex", "description": "Walk", "time": "08:00",
+                    "duration_mins": 30, "priority": "high", "frequency": "daily",
+                    "explanation": "Walk the dog.", "confidence": 0.9,
+                    "source_ids": []}],
+         "missing_information": [], "warnings": []}
+      ]},
+      "expected": {"status": "validation_failed", "task_count": 0,
+                   "repair_attempted": false}
+    },
+    {
+      "id": "unsupported-frequency",
+      "category": "validation",
+      "description": "Model returns frequency 'hourly'; one repair fixes it",
+      "input": "Walk Biscuit at 8 for 30 minutes every hour.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "client": {"type": "scripted", "responses": [
+        {"tasks": [{"pet_name": "Biscuit", "description": "Walk", "time": "08:00",
+                    "duration_mins": 30, "priority": "high", "frequency": "hourly",
+                    "explanation": "Walk request.", "confidence": 0.9,
+                    "source_ids": []}],
+         "missing_information": [], "warnings": []},
+        {"tasks": [{"pet_name": "Biscuit", "description": "Walk", "time": "08:00",
+                    "duration_mins": 30, "priority": "high", "frequency": "daily",
+                    "explanation": "Walk request (frequency corrected).",
+                    "confidence": 0.85, "source_ids": []}],
+         "missing_information": [], "warnings": []}
+      ]},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": true,
+                   "first_frequency": "daily"}
+    },
+    {
+      "id": "invalid-time",
+      "category": "validation",
+      "description": "Model returns '8 AM'; one repair converts to HH:MM",
+      "input": "Walk Biscuit at 8 in the morning for 30 minutes.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "client": {"type": "scripted", "responses": [
+        {"tasks": [{"pet_name": "Biscuit", "description": "Walk", "time": "8 AM",
+                    "duration_mins": 30, "priority": "high", "frequency": "daily",
+                    "explanation": "Morning walk.", "confidence": 0.9,
+                    "source_ids": []}],
+         "missing_information": [], "warnings": []},
+        {"tasks": [{"pet_name": "Biscuit", "description": "Walk", "time": "08:00",
+                    "duration_mins": 30, "priority": "high", "frequency": "daily",
+                    "explanation": "Morning walk (time corrected).",
+                    "confidence": 0.85, "source_ids": []}],
+         "missing_information": [], "warnings": []}
+      ]},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": true}
+    },
+    {
+      "id": "excessive-duration",
+      "category": "validation",
+      "description": "Model proposes a 500-minute task; one repair clamps it",
+      "input": "Walk Biscuit at 8 for a very long time.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "client": {"type": "scripted", "responses": [
+        {"tasks": [{"pet_name": "Biscuit", "description": "Walk", "time": "08:00",
+                    "duration_mins": 500, "priority": "high", "frequency": "daily",
+                    "explanation": "Long walk.", "confidence": 0.8,
+                    "source_ids": []}],
+         "missing_information": [], "warnings": []},
+        {"tasks": [{"pet_name": "Biscuit", "description": "Walk", "time": "08:00",
+                    "duration_mins": 60, "priority": "high", "frequency": "daily",
+                    "explanation": "Walk shortened to a supported duration.",
+                    "confidence": 0.75, "source_ids": []}],
+         "missing_information": [], "warnings": []}
+      ]},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": true}
+    },
+    {
+      "id": "existing-conflict",
+      "category": "conflict",
+      "description": "Proposal overlaps an existing 08:00-08:30 task; repaired",
+      "input": "Give Biscuit enrichment play at 8:15 for 15 minutes.",
+      "setup": {"pets": [["Biscuit", "dog"]],
+                "existing_tasks": [{"description": "Morning walk", "pet": "Biscuit",
+                                     "time": "08:00", "duration_mins": 30,
+                                     "priority": "high", "frequency": "daily"}]},
+      "expected": {"status": "ready_for_review", "task_count": 1,
+                   "conflict_free": true, "repair_attempted": true}
+    },
+    {
+      "id": "proposal-conflict",
+      "category": "conflict",
+      "description": "Two proposed tasks overlap each other; later one is moved",
+      "input": "Walk Biscuit at 8 for 30 minutes and give him enrichment play at 8:15.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 2,
+                   "conflict_free": true, "repair_attempted": true}
+    },
+    {
+      "id": "back-to-back-valid",
+      "category": "conflict",
+      "description": "Tasks that touch exactly (08:00-08:30, 08:30) are legal",
+      "input": "Walk Biscuit at 8 for 30 minutes. Feed Biscuit at 8:30.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "ready_for_review", "task_count": 2,
+                   "conflict_free": true, "repair_attempted": false}
+    },
+    {
+      "id": "medication-dosage",
+      "category": "safety",
+      "description": "Dosage decision must be refused before reaching the model",
+      "input": "Decide how much medicine Biscuit should receive.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "guardrail_rejected", "task_count": 0,
+                   "guardrail_code": "medical_dosage", "repair_attempted": false}
+    },
+    {
+      "id": "medical-diagnosis",
+      "category": "safety",
+      "description": "Diagnosis request must be refused",
+      "input": "Diagnose why Mochi keeps scratching and set up a treatment plan.",
+      "setup": {"pets": [["Mochi", "cat"]], "existing_tasks": []},
+      "expected": {"status": "guardrail_rejected", "task_count": 0,
+                   "guardrail_code": "medical_diagnosis", "repair_attempted": false}
+    },
+    {
+      "id": "malformed-model-output",
+      "category": "safety",
+      "description": "Model returns junk twice; system fails safely, adds nothing",
+      "input": "Walk Biscuit at 8 for 30 minutes.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "client": {"type": "scripted", "responses": [
+        {"tasks": "this is not a list"},
+        {"totally": "unrelated"}
+      ]},
+      "expected": {"status": "model_error", "task_count": 0,
+                   "repair_attempted": true}
+    },
+    {
+      "id": "api-failure",
+      "category": "safety",
+      "description": "Provider outage; system fails safely with a clear message",
+      "input": "Walk Biscuit at 8 for 30 minutes.",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "client": {"type": "api_failure"},
+      "expected": {"status": "model_error", "task_count": 0,
+                   "repair_attempted": false}
+    },
+    {
+      "id": "empty-input",
+      "category": "safety",
+      "description": "Empty request is rejected immediately",
+      "input": "",
+      "setup": {"pets": [["Biscuit", "dog"]], "existing_tasks": []},
+      "expected": {"status": "guardrail_rejected", "task_count": 0,
+                   "guardrail_code": "empty_input", "repair_attempted": false}
+    }
+  ]
+}
