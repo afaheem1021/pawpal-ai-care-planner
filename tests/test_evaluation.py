@@ -9,7 +9,15 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import evaluate as evaluate_module
-from evaluate import DEFAULT_CASES, compute_metrics, evaluate, load_cases, main
+from evaluate import (
+    DEFAULT_CASES,
+    compute_metrics,
+    default_live_output,
+    evaluate,
+    live_eligible_cases,
+    load_cases,
+    main,
+)
 
 CASES = load_cases(DEFAULT_CASES)
 
@@ -68,6 +76,22 @@ def test_main_writes_valid_results_json(tmp_path):
     assert payload["prompt_mode"] == "specialized"
     assert payload["metrics"]["total_cases"] == len(CASES)
     assert len(payload["results"]) == len(CASES)
+
+
+def test_live_cases_exclude_only_scripted_fault_fixtures():
+    live_cases = live_eligible_cases(CASES)
+    assert len(live_cases) < len(CASES)
+    assert all(case.get("client") in (None, "demo") for case in live_cases)
+    assert {case["id"] for case in CASES} - {case["id"] for case in live_cases} == {
+        "hallucinated-pet", "unsupported-frequency", "invalid-time",
+        "excessive-duration", "malformed-model-output", "api-failure",
+    }
+
+
+def test_live_output_filename_has_no_secret_material():
+    assert default_live_output("baseline", "Gemini", "gemini-3.5-flash").name == (
+        "results_live_gemini_gemini-3-5-flash_baseline.json"
+    )
 
 
 def test_crash_in_case_is_reported_not_raised(monkeypatch):

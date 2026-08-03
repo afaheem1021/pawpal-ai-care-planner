@@ -42,7 +42,8 @@ this upgrade and none of it was removed or replaced.
 
 | Component | Role |
 |---|---|
-| `AnthropicLLMClient` | Live provider adapter (default model `claude-opus-5`, configurable via `PAWPAL_LLM_MODEL`) |
+| `GeminiLLMClient` | Default live provider adapter; stdlib REST client for `gemini-3.5-flash` (configurable via `PAWPAL_LLM_MODEL`) |
+| `AnthropicLLMClient` | Optional live provider adapter, selected with `PAWPAL_LLM_PROVIDER=anthropic` |
 | `DemoLLMClient` | Deterministic rule-based extractor implementing the same interface — used in demo mode, CLI, and evaluation |
 | `FakeLLMClient` | Scripted responses/exceptions for unit tests |
 | Specialized prompt | Schema, allowed values, safety rules, 4 few-shot examples |
@@ -77,10 +78,10 @@ only for comparison and is never used in production.
 
 These are the *actual* numbers from `python evaluate.py --prompt-mode
 baseline|specialized` — and they are identical **because the offline demo
-client is prompt-agnostic**. The experiment was not manipulated in either
-direction; the offline run validates the comparison harness, not the prompt
-effect. What the specialization *structurally* prevents (each mapped to the
-validator error it would otherwise trigger with a real model):
+client is prompt-agnostic**. The offline run validates the comparison
+harness, not the prompt effect. What the specialization *structurally*
+prevents (each mapped to the validator error it would otherwise trigger with
+a real model):
 
 | Baseline prompt omission | Failure it invites | Caught by |
 |---|---|---|
@@ -91,9 +92,28 @@ validator error it would otherwise trigger with a real model):
 | No medical rules | dosage/diagnosis content | `prohibited_medical_content` |
 | No source-id rule | fabricated citations | `unknown_source_id` |
 
-The one remaining setup step for live numbers:
-`PAWPAL_USE_LIVE_MODEL=true` + an API key in `.env`, then run both commands
-above. No live results are claimed because none were collected.
+### Live experiment
+
+An opt-in `--live` flag runs the 13 genuine user-input cases through the
+configured provider and omits six scripted fault fixtures that are only
+meaningful with `FakeLLMClient`. On 2026-08-02, the adapter made a successful
+direct structured call to `gemini-3.5-flash`; the paired live experiment
+produced the following results:
+
+| Metric | Baseline | Specialized |
+|---|---:|---:|
+| Overall pass rate | 30.8% (4/13) | 92.3% (12/13) |
+| Structured output validity | 0/9 | 8/9 |
+| Correct task-count rate | 5/13 | 12/13 |
+| Conflict-free final plans | 0/0 | 7/7 |
+| Guardrail behavior | 4/4 | 4/4 |
+| Repair success | 0/0 | 2/2 |
+
+The baseline's four passes were all pre-model guardrail cases. The specialized
+prompt generated seven valid, conflict-free review plans; one malformed
+structured reply was safely rejected, so no task was added. This is one live,
+non-deterministic run rather than a broad model benchmark. Raw result
+snapshots are saved in `evaluation/results_live_gemini_gemini-3-5-flash_*.json`.
 
 ## Reliability Mechanisms
 
@@ -137,7 +157,8 @@ model-misbehavior cases (hallucinated pet, `hourly` frequency, `8 AM` time,
 isolated world; expected status, task counts, repair behavior, guardrail
 codes, and a universal "no unapproved mutation" invariant are checked.
 Results are written to `evaluation/results.json`; safety-case failures exit
-nonzero.
+nonzero. `evaluate.py --live` instead runs the 13 cases without scripted
+clients and writes a provider/model-specific result snapshot.
 
 ## Evaluation Results
 

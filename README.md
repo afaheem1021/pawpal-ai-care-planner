@@ -22,7 +22,7 @@ human to approve tasks **individually** before anything touches the schedule.
   validation → repair → human approval) in the `pawpal_ai/` package, wired
   into the existing Streamlit app, CLI, tests, and docs.
 - **Reproducible without an API key:** a deterministic offline demo client
-  powers the CLI demo, the Streamlit demo mode, all 95 unit tests, and the
+  powers the CLI demo, the Streamlit demo mode, all 107 unit tests, and the
   19-case evaluation harness.
 
 ## Original Base Project
@@ -73,7 +73,7 @@ All of this existed **before** the AI upgrade and still works unchanged
 | Guardrails | `pawpal_ai/guardrails.py` |
 | TF-IDF retrieval over 4 knowledge files | `pawpal_ai/retriever.py`, `knowledge_base/` |
 | Specialized + baseline prompts, repair prompt | `pawpal_ai/prompts.py` |
-| Provider-agnostic LLM client (Anthropic adapter, fake, offline demo) | `pawpal_ai/llm_client.py`, `pawpal_ai/demo_client.py` |
+| Provider-agnostic LLM client (Gemini REST adapter, Anthropic adapter, fake, offline demo) | `pawpal_ai/llm_client.py`, `pawpal_ai/demo_client.py` |
 | Typed schemas with boundary validation | `pawpal_ai/schemas.py` |
 | Business/conflict validator | `pawpal_ai/validator.py` |
 | Multi-step workflow with 1-repair policy | `pawpal_ai/workflow.py` |
@@ -89,7 +89,7 @@ Input guardrails            (reject unsafe/empty/unknown-pet requests, no model 
         ↓
 Custom context retrieval    (TF-IDF over knowledge_base/*.md, stable source ids)
         ↓
-Specialized AI extraction   (live Anthropic model OR deterministic demo client)
+Specialized AI extraction   (live Gemini/Anthropic model OR deterministic demo client)
         ↓
 Structured task proposal    (strict JSON → TaskProposal dataclasses)
         ↓
@@ -132,7 +132,7 @@ uses.
 ├── knowledge_base/           # pet_profiles / owner_preferences /
 │                             # scheduling_rules / task_templates (.md)
 ├── evaluation/               # cases.json, results.json, results_baseline.json
-├── tests/                    # 95 tests (original 12 preserved)
+├── tests/                    # 107 tests (original 12 preserved)
 ├── diagrams/                 # architecture.mmd, uml_final.mmd
 ├── logs/                     # runtime JSONL traces (gitignored)
 ├── .env.example              # config template (no secrets committed)
@@ -210,8 +210,9 @@ See [.env.example](.env.example). Demo mode needs **nothing** configured.
 | Variable | Purpose |
 |---|---|
 | `PAWPAL_USE_LIVE_MODEL` | `true` to call the real model (default `false`) |
-| `PAWPAL_API_KEY` | provider API key (never committed; `ANTHROPIC_API_KEY` also works) |
-| `PAWPAL_LLM_MODEL` | model id (default `claude-opus-5`) |
+| `PAWPAL_LLM_PROVIDER` | `gemini` (default) or `anthropic` |
+| `PAWPAL_API_KEY` | provider API key (never committed; `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` also work) |
+| `PAWPAL_LLM_MODEL` | provider model id (default Gemini model: `gemini-3.5-flash`) |
 | `PAWPAL_LOGGING_ENABLED` | `false` disables JSONL tracing |
 
 ## Running in Demo Mode
@@ -221,7 +222,7 @@ Everything below runs offline with the deterministic demo client:
 ```bash
 python main.py --demo        # three-case AI CLI demo
 streamlit run app.py         # UI shows "Mode: demo"
-python -m pytest -v          # 95 tests, no network
+python -m pytest -v          # 107 tests, no network
 python evaluate.py           # 19-case evaluation
 ```
 
@@ -234,9 +235,10 @@ python main.py --live
 streamlit run app.py         # UI shows "Mode: live model"
 ```
 
-Unit tests and the evaluation harness intentionally **never** use the live
-model. If live mode is misconfigured, the app falls back to demo mode with a
-notice instead of crashing.
+`main.py --live` creates the provider selected by `PAWPAL_LLM_PROVIDER`
+directly. If it is misconfigured, the CLI falls back to demo mode with a
+notice instead of crashing. Unit tests remain offline; the evaluation harness
+also supports an explicit, opt-in live experiment (below).
 
 ## Running the Streamlit Application
 
@@ -266,7 +268,7 @@ Actual output (tail):
 tests/test_workflow.py::test_approval_revalidates_conflicts_and_adds_nothing PASSED [ 98%]
 tests/test_workflow.py::test_approval_rejects_edited_invalid_task PASSED [100%]
 
-============================== 95 passed in 0.48s ==============================
+============================= 107 passed in 0.62s =============================
 ```
 
 All 12 original PawPal+ tests are preserved and passing.
@@ -428,6 +430,9 @@ python evaluate.py --prompt-mode specialized   # evaluation/results.json
 python evaluate.py --prompt-mode baseline      # evaluation/results_baseline.json
 ```
 
+The reproducible offline harness uses a deterministic, prompt-agnostic demo
+client, so both configurations intentionally match:
+
 | Metric | Baseline | Specialized |
 |---|---:|---:|
 | Overall pass rate | 100.0% | 100.0% |
@@ -435,15 +440,40 @@ python evaluate.py --prompt-mode baseline      # evaluation/results_baseline.jso
 | Guardrail behavior | 4/4 | 4/4 |
 | Repair success | 6/6 | 6/6 |
 
-**Honest interpretation:** in offline mode both prompts score identically
-because the deterministic demo client is prompt-agnostic — it cannot exhibit
-the failure modes a real model shows under an under-specified prompt. The
-offline comparison therefore verifies the *harness*, not the prompt effect.
-The structural difference is documented in `model_card.md` (what the
-baseline prompt omits and which validator error each omission maps to), and
-running the true comparison is one command once an API key is configured:
-`PAWPAL_USE_LIVE_MODEL=true python evaluate.py --prompt-mode baseline`.
-No live-model numbers are claimed here because none were collected.
+For the live comparison, use the explicit `--live` flag; it loads the
+gitignored `.env`, uses the configured provider, and writes separate,
+credential-free files:
+
+```bash
+python evaluate.py --live --prompt-mode baseline
+python evaluate.py --live --prompt-mode specialized
+```
+
+The live run evaluates the 13 genuine user-input cases. It excludes six
+scripted fault fixtures (malformed output, network failure, and deliberately
+invalid proposals), which remain in the offline reliability suite but cannot
+measure a real provider's prompt behavior.
+
+Real live results, collected on 2026-08-02 with `gemini-3.5-flash`:
+
+| Metric | Baseline | Specialized |
+|---|---:|---:|
+| Overall pass rate | 30.8% (4/13) | 92.3% (12/13) |
+| Structured output validity | 0/9 | 8/9 |
+| Correct task-count rate | 5/13 | 12/13 |
+| Conflict-free final plans | 0/0 | 7/7 |
+| Guardrail behavior | 4/4 | 4/4 |
+| Repair success | 0/0 | 2/2 |
+
+The under-specified baseline produced no valid structured proposals; only
+pre-model guardrails passed. The specialized prompt produced valid,
+conflict-free proposals in seven review-ready cases, while one malformed
+provider response was safely rejected without changing a schedule. These are
+single-run, non-deterministic observations, not a model-wide benchmark. The
+machine-readable snapshots are
+[`results_live_gemini_gemini-3-5-flash_baseline.json`](evaluation/results_live_gemini_gemini-3-5-flash_baseline.json)
+and
+[`results_live_gemini_gemini-3-5-flash_specialized.json`](evaluation/results_live_gemini_gemini-3-5-flash_specialized.json).
 
 ## RAG Before and After
 
@@ -497,7 +527,7 @@ non-medical scope.
 
 ## Future Improvements
 
-- Collect live-model metrics for the baseline-vs-specialized table
+- Repeat live baseline-vs-specialized runs and report variance/cost
 - Persist owners/tasks (SQLite) so approvals survive restarts
 - Embedding-based retrieval once the knowledge base outgrows TF-IDF
 - Multi-day planning and owner-editable availability windows

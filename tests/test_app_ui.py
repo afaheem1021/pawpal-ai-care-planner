@@ -25,6 +25,12 @@ REQUEST = (
 )
 
 
+@pytest.fixture(autouse=True)
+def force_demo_mode(monkeypatch):
+    """Keep UI tests offline even when a developer has a live .env file."""
+    monkeypatch.setenv("PAWPAL_USE_LIVE_MODEL", "false")
+
+
 def make_app():
     at = AppTest.from_file(APP_PATH, default_timeout=30)
     owner = Owner("Jordan")

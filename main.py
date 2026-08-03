@@ -111,8 +111,14 @@ def _print_workflow_result(result):
 
 
 def run_ai_demo(live: bool):
+    import os
+
     from pawpal_ai.interaction_logger import InteractionLogger
-    from pawpal_ai.llm_client import AnthropicLLMClient, MissingAPIKeyError, load_env_file
+    from pawpal_ai.llm_client import (
+        LLMClientError,
+        create_live_client,
+        load_env_file,
+    )
     from pawpal_ai.demo_client import DemoLLMClient
     from pawpal_ai.retriever import KnowledgeRetriever
     from pawpal_ai.workflow import PawPalAIWorkflow, apply_approved_tasks
@@ -120,9 +126,10 @@ def run_ai_demo(live: bool):
     if live:
         load_env_file()
         try:
-            client = AnthropicLLMClient()
-            mode = "LIVE MODEL"
-        except MissingAPIKeyError as err:
+            client = create_live_client()
+            mode = (f"LIVE MODEL ({os.environ.get('PAWPAL_LLM_PROVIDER', 'gemini')}"
+                    f" / {os.environ.get('PAWPAL_LLM_MODEL', 'default')})")
+        except LLMClientError as err:
             print(f"Live mode unavailable: {err}")
             print("Falling back to deterministic demo mode.\n")
             client, mode = DemoLLMClient(), "DEMO (fallback)"

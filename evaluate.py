@@ -18,12 +18,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
 from pawpal_system import Owner, Pet, Scheduler, Task
 from pawpal_ai.demo_client import DemoLLMClient
-from pawpal_ai.llm_client import FakeLLMClient, NetworkError
+from pawpal_ai.llm_client import (
+    LLMClientError,
+    FakeLLMClient,
+    NetworkError,
+    create_live_client,
+    load_env_file,
+)
 from pawpal_ai.retriever import KnowledgeRetriever
 from pawpal_ai.workflow import PawPalAIWorkflow, apply_approved_tasks
 
@@ -43,8 +51,10 @@ def load_cases(path: Path) -> list:
     return cases
 
 
-def build_client(case: dict):
-    """Choose the deterministic client for a case."""
+def build_client(case: dict, live_client=None):
+    """Choose a client for a case, using the live one when requested."""
+    if live_client is not None:
+        return live_client
     spec = case.get("client", "demo")
     if spec == "demo" or spec is None:
         return DemoLLMClient()
@@ -70,11 +80,12 @@ def build_world(setup: dict):
     return owner, Scheduler(owner)
 
 
-def run_case(case: dict, retriever, prompt_mode: str = "specialized") -> dict:
+def run_case(case: dict, retriever, prompt_mode: str = "specialized",
+             live_client=None) -> dict:
     """Run one case and return actual observations + pass/fail per check."""
     owner, scheduler = build_world(case["setup"])
     tasks_before = sum(len(p.get_tasks()) for p in owner.get_all_pets())
-    workflow = PawPalAIWorkflow(retriever, build_client(case),
+    workflow = PawPalAIWorkflow(retriever, build_client(case, live_client),
                                 prompt_mode=prompt_mode)
     result = workflow.run(case["input"], owner, scheduler)
 
@@ -193,14 +204,17 @@ def compute_metrics(results: list) -> dict:
     }
 
 
-def evaluate(cases: list, prompt_mode: str = "specialized"):
+def evaluate(cases: list, prompt_mode: str = "specialized", live_client=None):
     """Run all cases; returns (results, metrics, exit_code)."""
     retriever = KnowledgeRetriever(PROJECT_ROOT / "knowledge_base")
     results = []
     crashed = False
     for case in cases:
         try:
-            results.append(run_case(case, retriever, prompt_mode))
+            if live_client is None:
+                results.append(run_case(case, retriever, prompt_mode))
+            else:
+                results.append(run_case(case, retriever, prompt_mode, live_client))
         except Exception as err:  # a crash is itself a failed reliability test
             crashed = True
             results.append({
@@ -218,9 +232,11 @@ def evaluate(cases: list, prompt_mode: str = "specialized"):
     return results, metrics, exit_code
 
 
-def print_report(results: list, metrics: dict, prompt_mode: str) -> None:
+def print_report(results: list, metrics: dict, prompt_mode: str,
+                 mode: str = "offline") -> None:
     print("PawPal AI Evaluation")
     print("====================")
+    print(f"Mode: {mode}")
     print(f"Prompt mode: {prompt_mode}\n")
     for result in results:
         marker = "PASS" if result["passed"] else "FAIL"
@@ -248,20 +264,68 @@ def print_report(results: list, metrics: dict, prompt_mode: str) -> None:
     print(f"Safe failure behavior:      {metrics['safe_failure_rate']}")
 
 
+def live_eligible_cases(cases: list) -> list:
+    """Return real-user-input cases suitable for a live prompt experiment.
+
+    The omitted cases deliberately inject scripted malformed responses,
+    validation violations, or an outage.  They remain part of the offline
+    reliability suite, but cannot measure a provider's response to the two
+    prompts.
+    """
+    return [case for case in cases if case.get("client") in (None, "demo")]
+
+
+def default_live_output(prompt_mode: str, provider: str, model: str) -> Path:
+    """Produce a stable, credential-free filename for live experiment output."""
+    safe_provider = re.sub(r"[^a-z0-9]+", "-", provider.lower()).strip("-")
+    safe_model = re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
+    return PROJECT_ROOT / "evaluation" / (
+        f"results_live_{safe_provider}_{safe_model}_{prompt_mode}.json"
+    )
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Run the PawPal AI evaluation")
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULTS)
     parser.add_argument("--prompt-mode", choices=["specialized", "baseline"],
                         default="specialized")
+    parser.add_argument("--live", action="store_true",
+                        help=("run real-user-input cases against the configured "
+                              "live provider; excludes scripted fault fixtures"))
     args = parser.parse_args(argv)
 
     cases = load_cases(args.cases)
-    results, metrics, exit_code = evaluate(cases, args.prompt_mode)
-    print_report(results, metrics, args.prompt_mode)
+    mode = "offline"
+    provider = None
+    model = None
+    live_client = None
+    if args.live:
+        load_env_file()
+        try:
+            live_client = create_live_client()
+        except LLMClientError as err:
+            print(f"Live evaluation unavailable: {err}", file=sys.stderr)
+            return 2
+        cases = live_eligible_cases(cases)
+        provider = os.environ.get("PAWPAL_LLM_PROVIDER", "gemini").strip().lower()
+        model = getattr(live_client, "model", "default")
+        mode = f"live ({provider} / {model})"
+        if args.output == DEFAULT_RESULTS:
+            args.output = default_live_output(args.prompt_mode, provider, model)
 
-    payload = {"prompt_mode": args.prompt_mode, "metrics": metrics,
+    results, metrics, exit_code = evaluate(cases, args.prompt_mode, live_client)
+    print_report(results, metrics, args.prompt_mode, mode)
+
+    payload = {"mode": "live" if args.live else "offline",
+               "prompt_mode": args.prompt_mode, "metrics": metrics,
                "results": results}
+    if args.live:
+        payload["provider"] = provider
+        payload["model"] = model
+        payload["excluded_scripted_fixture_count"] = (
+            len(load_cases(args.cases)) - len(cases)
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"\nResults written to {args.output}")
