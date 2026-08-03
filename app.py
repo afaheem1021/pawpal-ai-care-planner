@@ -1,9 +1,17 @@
 from datetime import time
+from pathlib import Path
 
 import streamlit as st
 
 # Step 1: bring the logic layer into the UI layer.
 from pawpal_system import VALID_FREQUENCIES, Owner, Pet, Scheduler, Task
+
+# PawPal AI: proposal pipeline on top of the original deterministic system.
+from pawpal_ai.interaction_logger import InteractionLogger
+from pawpal_ai.llm_client import MissingAPIKeyError, create_client_from_env
+from pawpal_ai.retriever import KnowledgeRetriever
+from pawpal_ai.schemas import TaskProposal
+from pawpal_ai.workflow import PawPalAIWorkflow, apply_approved_tasks
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -114,6 +122,204 @@ if pets:
         st.info("No tasks yet. Add one above.")
 else:
     st.caption("Add a pet first, then you can schedule tasks for it.")
+
+st.divider()
+
+# ---------------- PawPal AI Task Assistant ----------------
+st.subheader("✨ PawPal AI Task Assistant")
+
+
+@st.cache_resource
+def get_ai_components():
+    """Build the retriever + LLM client once per server process."""
+    retriever = KnowledgeRetriever(Path(__file__).parent / "knowledge_base")
+    try:
+        client, mode = create_client_from_env()
+    except MissingAPIKeyError as err:
+        # Live mode requested but misconfigured: fall back to demo, stay usable.
+        from pawpal_ai.demo_client import DemoLLMClient
+
+        return retriever, DemoLLMClient(), "demo", str(err)
+    return retriever, client, mode, None
+
+
+def run_ai_workflow(request_text):
+    retriever, client, mode, _ = get_ai_components()
+    workflow = PawPalAIWorkflow(retriever, client, logger=InteractionLogger())
+    return workflow.run(request_text, owner, Scheduler(owner))
+
+
+if not pets:
+    st.caption("Add a pet first, then describe care tasks in plain English.")
+else:
+    _, _, ai_mode, ai_mode_error = get_ai_components()
+    if ai_mode == "live":
+        st.caption("Mode: **live model**")
+    else:
+        st.caption("Mode: **demo** (deterministic offline extractor — no API key needed)")
+        if ai_mode_error:
+            st.info(f"Live mode unavailable: {ai_mode_error}")
+    st.warning(
+        "AI proposals are suggestions only. Review every task below — nothing "
+        "is added to the schedule until you approve it.", icon="⚠️"
+    )
+
+    with st.form("ai_request_form"):
+        st.selectbox(
+            "Pet focus (optional — the request text decides)",
+            ["All pets"] + [p.name for p in pets],
+            key="ai_pet_focus",
+        )
+        ai_request = st.text_area(
+            "Describe the care tasks in plain English",
+            placeholder=(
+                "Biscuit needs a 30-minute walk every morning around 8. "
+                "Feed him after the walk. Clean Mochi's litter box every "
+                "evening at 6."
+            ),
+            key="ai_request_text",
+        )
+        if st.form_submit_button("✨ Generate proposal"):
+            st.session_state.ai_result = run_ai_workflow(ai_request)
+            st.session_state.pop("ai_applied", None)
+
+    ai_result = st.session_state.get("ai_result")
+    if ai_result is not None:
+        # ----- status banner
+        if ai_result.status == "ready_for_review":
+            st.success(ai_result.user_message)
+        elif ai_result.status == "needs_user_information":
+            st.warning(ai_result.user_message)
+        elif ai_result.status in ("guardrail_rejected", "model_error"):
+            st.error(ai_result.user_message)
+        else:  # validation_failed
+            st.warning(ai_result.user_message)
+
+        # ----- workflow details: retrieved context, repair, trace
+        if ai_result.retrieved_chunks:
+            with st.expander(
+                f"Retrieved context ({len(ai_result.retrieved_chunks)} sources)"
+            ):
+                for chunk in ai_result.retrieved_chunks:
+                    st.markdown(f"**`{chunk.source_id}`** (score {chunk.score})")
+                    st.caption(chunk.text[:400])
+        if ai_result.repair_attempted:
+            st.info("One automatic repair attempt was made on this proposal.")
+        if ai_result.validation and ai_result.validation.issues:
+            with st.expander(
+                f"Validation issues ({len(ai_result.validation.issues)})"
+            ):
+                for issue in ai_result.validation.issues:
+                    icon = "🛑" if issue.severity == "error" else "⚠️"
+                    st.markdown(f"{icon} `{issue.code}` — {issue.message}")
+
+        # ----- review & approve proposals
+        proposal = ai_result.proposal
+        if proposal and proposal.tasks and ai_result.validation:
+            valid_tasks = set(map(id, ai_result.validation.valid_tasks))
+            error_indexes = {
+                issue.task_index for issue in ai_result.validation.issues
+                if issue.severity == "error" and issue.task_index is not None
+            }
+            st.markdown("#### Review proposed tasks")
+            with st.form("ai_review_form"):
+                approvals = []
+                for index, task in enumerate(proposal.tasks):
+                    is_valid = id(task) in valid_tasks and index not in error_indexes
+                    badge = "✅ valid" if is_valid else "🛑 invalid — fix before approving"
+                    st.markdown(f"**Task {index + 1}: {task.description}** ({badge})")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        pet_name = st.selectbox(
+                            "Pet", [p.name for p in pets],
+                            index=[p.name for p in pets].index(task.pet_name)
+                            if task.pet_name in [p.name for p in pets] else 0,
+                            key=f"ai_pet_{index}",
+                        )
+                        description = st.text_input(
+                            "Description", value=task.description,
+                            key=f"ai_desc_{index}",
+                        )
+                    with col2:
+                        time_value = st.text_input(
+                            "Time (HH:MM)", value=task.time, key=f"ai_time_{index}"
+                        )
+                        duration = st.number_input(
+                            "Duration (min)", min_value=1, max_value=240,
+                            value=int(task.duration_mins)
+                            if 1 <= task.duration_mins <= 240 else 15,
+                            key=f"ai_dur_{index}",
+                        )
+                    with col3:
+                        priority = st.selectbox(
+                            "Priority", ["high", "medium", "low"],
+                            index=["high", "medium", "low"].index(task.priority)
+                            if task.priority in ("high", "medium", "low") else 1,
+                            key=f"ai_prio_{index}",
+                        )
+                        frequency = st.selectbox(
+                            "Frequency", sorted(VALID_FREQUENCIES),
+                            index=sorted(VALID_FREQUENCIES).index(task.frequency)
+                            if task.frequency in VALID_FREQUENCIES else 0,
+                            key=f"ai_freq_{index}",
+                        )
+                    st.caption(
+                        f"Why: {task.explanation}  \n"
+                        f"Confidence: {task.confidence:.2f} · "
+                        f"Sources: {', '.join(task.source_ids) or '(none)'}"
+                    )
+                    approved = st.checkbox(
+                        "Approve this task", key=f"ai_approve_{index}",
+                        value=False,
+                    )
+                    approvals.append((approved, pet_name, description, time_value,
+                                      int(duration), priority, frequency, task))
+                    st.divider()
+
+                if st.form_submit_button("Add Approved Tasks"):
+                    selected = []
+                    for (approved, pet_name, description, time_value, duration,
+                         priority, frequency, original) in approvals:
+                        if not approved:
+                            continue
+                        try:
+                            selected.append(TaskProposal(
+                                pet_name=pet_name,
+                                description=description,
+                                time=time_value.strip(),
+                                duration_mins=duration,
+                                priority=priority,
+                                frequency=frequency,
+                                explanation=original.explanation,
+                                confidence=original.confidence,
+                                source_ids=original.source_ids,
+                            ))
+                        except Exception as err:
+                            st.error(f"'{description}' could not be prepared: {err}")
+                    if not selected:
+                        st.warning("No tasks were approved — nothing was added.")
+                    else:
+                        added, review = apply_approved_tasks(
+                            selected, owner, Scheduler(owner),
+                            ai_result.retrieved_chunks,
+                            logger=InteractionLogger(),
+                        )
+                        if added:
+                            # Clear the pending proposal so a page refresh
+                            # cannot re-add the same tasks.
+                            st.session_state.pop("ai_result", None)
+                            st.session_state.flash = (
+                                f"Added {added} AI-proposed task(s) to the "
+                                "schedule after your approval."
+                            )
+                            st.rerun()
+                        else:
+                            st.error(
+                                "The approved tasks failed revalidation — "
+                                "nothing was added. Issues: "
+                                + "; ".join(i.message for i in review.issues
+                                            if i.severity == "error")
+                            )
 
 st.divider()
 
