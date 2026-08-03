@@ -538,7 +538,16 @@ non-medical scope.
 - Multi-day planning and owner-editable availability windows
 - Expand the evaluation set and add live-model regression runs
 
-## Portfolio Reflection
+## Portfolio Artifact
+
+**GitHub repository:**
+[github.com/afaheem1021/pawpal-ai-care-planner](https://github.com/afaheem1021/pawpal-ai-care-planner)
+
+**What this project says about me as an AI engineer:** I treat AI engineering
+as systems engineering, not just prompt writing. I can integrate a model into
+an existing application while preserving deterministic business rules,
+ground outputs in retrieved evidence, design human approval boundaries, and
+measure both successful and failed behavior honestly.
 
 The most transferable lesson: **treat the model as an untrusted input
 source**. Every reliability property this system has — schema boundaries,
@@ -565,10 +574,14 @@ weakening any guarantee it made.
 | Reliability examples | Examples 2–3, evaluation safety cases |
 | Installation instructions | README: Installation |
 | Test instructions | README: Running Unit Tests |
-| AI collaboration reflection | `model_card.md` |
-| Helpful / flawed AI suggestion | `model_card.md` |
-| Limitations | `model_card.md` |
-| RAG bonus | Retriever + knowledge base + before/after above |
-| Agent bonus | Generate→check→repair workflow + committed traces |
-| Specialization bonus | Few-shot specialized prompt + comparison harness |
-| Evaluation bonus | `evaluate.py`, 19 cases, saved results |
+| Reproducible execution evidence | README: End-to-End Examples + Evaluation Results |
+| Portfolio artifact | README: Portfolio Artifact (repository link + reflection) |
+| Limitations and biases | `model_card.md`: Limitations and Biases |
+| Misuse and prevention | `model_card.md`: Potential Misuse + Safety Guardrails |
+| Reliability surprise | `model_card.md`: What Surprised Me While Testing Reliability |
+| AI collaboration | `model_card.md`: AI Collaboration During Development |
+| Helpful / flawed AI suggestion | `model_card.md`: Helpful + Flawed Suggestion sections |
+| RAG enhancement (+2) | Multi-source knowledge base + RAG Before and After |
+| Agentic enhancement (+2) | Generate→validate→repair workflow + `ai_interactions.md` traces |
+| Specialization (+2) | Four-shot specialized prompt + measured live baseline comparison |
+| Evaluation harness (+2) | `evaluate.py`, 19 cases, saved JSON results |

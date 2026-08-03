@@ -235,7 +235,12 @@ Two real ones, both caught by verification rather than by reading the code:
    evidence. It was replaced with real measurements over final-plan error
    codes — which is why known-pet compliance now honestly reads 12/13.
 
-## What Testing Revealed
+## What Surprised Me While Testing Reliability
+
+The biggest surprise was that reliability bugs appeared in deterministic
+code around the model—not only in model output. Small implementation choices
+in keyword matching, conflict repair, type validation, and metric denominators
+could all create confidently wrong behavior or misleading evidence.
 
 - The original scheduler's back-to-back rule matters for repair: the first
   conflict-repair implementation would have parked repaired tasks in dead
