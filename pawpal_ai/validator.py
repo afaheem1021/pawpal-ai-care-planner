@@ -216,13 +216,19 @@ class ProposalValidator:
             if first_index is None and second_index is None:
                 continue  # existing-vs-existing conflict: not the proposal's fault
             if first_index is not None and second_index is not None:
+                # Proposal vs proposal: flag only the LATER task (`second` is
+                # later after sort_by_time) so a repair moves one, not both.
                 code = "proposal_conflict"
                 detail = "another proposed task"
+                flagged = [(second_index, first)]
             else:
                 code = "schedule_conflict"
                 detail = "an existing scheduled task"
-            for index, other in ((second_index, first), (first_index, second)):
-                if index is None or (code, index) in reported:
+                proposed_index = first_index if first_index is not None else second_index
+                other = second if first_index is not None else first
+                flagged = [(proposed_index, other)]
+            for index, other in flagged:
+                if (code, index) in reported:
                     continue
                 reported.add((code, index))
                 issues.append(ValidationIssue(
