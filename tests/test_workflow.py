@@ -184,6 +184,7 @@ def test_model_exception_fails_safely():
 
     assert result.status == "model_error"
     assert "manual" in result.user_message.lower()
+    assert "connection refused" in result.user_message.lower()
     assert total_task_count(owner) == 0
 
 

@@ -42,6 +42,16 @@ defaults; the owner's request always wins when it specifies a value.
 - Typical priority: low
 - Typical frequency: weekly
 
+## General Pet Cleaning
+
+- Applies to: all pets
+- Examples: coat cleaning, wiping, bathing, or another non-medical cleaning task
+- Typical duration: 15 minutes
+- Typical priority: low
+- Typical frequency: once when the owner does not specify recurrence
+- If the owner says only "cleaning," keep the description general rather than
+  assuming it means litter-box cleaning
+
 ## Litter Box Cleaning
 
 - Applies to: cats

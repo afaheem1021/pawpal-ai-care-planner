@@ -66,6 +66,15 @@ def test_generate_shows_proposal_without_mutating_schedule():
     assert all_tasks(at) == []  # nothing added before approval
 
 
+def test_ai_prompt_help_is_available_without_cluttering_the_form():
+    at = make_app()
+
+    assert any(
+        "How to get the best care plan" in (expander.label or "")
+        for expander in at.expander
+    )
+
+
 def test_partial_approval_adds_only_selected_and_clears_proposal():
     at = make_app()
     generate(at, REQUEST)
