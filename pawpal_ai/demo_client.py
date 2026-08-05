@@ -25,6 +25,8 @@ _ACTIONS = [
     (("water",), "Refill water", 5, "medium", "water-refill"),
     (("play", "playtime", "enrichment", "fetch"), "Enrichment play", 15, "medium", "enrichment"),
     (("groom", "grooming", "brush", "brushing", "nail"), "Grooming", 15, "low", "grooming"),
+    (("clean", "cleans", "cleaning", "bath", "bathe"), "Cleaning", 15, "low",
+     "general-pet-cleaning"),
     (("pill", "medication", "medicine"), "Give prescribed medication", 5, "high",
      "prescribed-medication-reminder"),
     (("vet", "appointment"), "Vet appointment", 60, "high", "vet-appointment-reminder"),
@@ -157,6 +159,10 @@ class DemoLLMClient:
         about feeding, and its verb comes first.
         """
         lowered = clause.lower()
+        # "Clean the litter box" is specifically litter care even though the
+        # generic verb "clean" appears before "litter" in the clause.
+        if re.search(r"\blitter(?:\s+box)?\b", lowered):
+            return "Clean litter box", 10, "medium", "litter-box-cleaning"
         best = None
         best_pos = None
         for keywords, description, duration, priority, slug in _ACTIONS:

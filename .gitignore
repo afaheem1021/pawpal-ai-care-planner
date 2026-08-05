@@ -3,5 +3,21 @@ __pycache__/
 .venv_new/
 .pytest_cache/
 .DS_Store
+
+# Local credentials and environment-specific overrides
 .env
+.env.*
+!.env.example
+
+# Personal working material (never publish)
+presentation_notes.md
+private/
+.private/
+only_for_me/
+only-for-me/
+*.private.*
+*.personal.*
+*_only_for_me.*
+*-only-for-me.*
+
 logs/*.jsonl

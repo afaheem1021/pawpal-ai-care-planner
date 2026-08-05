@@ -265,9 +265,9 @@ class PawPalAIWorkflow:
             retrieved_chunks=chunks, repair_attempted=repair_attempted,
             trace=trace,
             user_message=(
-                "The AI service is unavailable right now, so no proposal was "
-                "generated. Your schedule was not changed - manual task entry "
-                "still works."
+                "The live AI model could not generate a proposal. "
+                f"Details: {err}. Your schedule was not changed - manual task "
+                "entry still works."
             ),
         )
         self.logger.log_event("model_error", error_type=type(err).__name__)
